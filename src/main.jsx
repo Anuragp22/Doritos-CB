@@ -6,14 +6,19 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import DashboardPage from './Routes/DashboardPage/DashboardPage';
 import RootLayout from './layouts/rootLayout/rootLayout';
 import ChatPage from './Routes/ChatPage/ChatPage';
+import SignInPage from './Routes/SignInPage/SignInPage';
+import SignUpPage from './Routes/SignUpPage/SignUpPage';
+import DashboardLayout from './layouts/dashboardLayout/dashboardLayout';
 
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
     children: [
       { path: '/', element: <HomePage /> },
+      { path: '/sign-in/*', element: <SignInPage /> },
+      { path: '/sign-up', element: <SignUpPage /> },
       {
-        element: <DashboardPage />,
+        element: <DashboardLayout />,
         children: [
           {
             path: '/dashboard',
