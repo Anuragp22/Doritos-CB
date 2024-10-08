@@ -1,0 +1,36 @@
+.dashboardLayout {
+  display: flex;
+  gap: 50px;
+  padding-top: 20x;
+  height: 100%;
+
+  .menu {
+    flex: 1;
+  }
+  .content {
+    flex: 4;
+    background-color: #12101b;
+  }
+
+  .title {
+    font-weight: 600px;
+    font-size: 10px;
+    margin-bottom: 10px;
+  }
+  .links {
+    display: flex;
+    flex-direction: column;
+    overflow: scroll;
+  }
+  a {
+    padding: 10px;
+    border-radius: 10px;
+
+    &:hover {
+      background-color: #2c2937;
+    }
+  }
+  .upgrade {
+    margin-top: auto;
+  }
+}
