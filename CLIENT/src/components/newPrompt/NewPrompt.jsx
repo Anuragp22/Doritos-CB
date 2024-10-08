@@ -2,8 +2,12 @@ import Upload from '../upload/upload';
 import './newPrompt.css';
 import { useState, useEffect, useRef } from 'react';
 import { IKImage } from 'imagekitio-react';
+import model from '../../lib/gemini';
+import Markdown from 'react-markdown';
 const NewPrompt = () => {
   const endRef = useRef(null);
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
 
   const [img, setImg] = useState({
     isLoading: false,
@@ -13,8 +17,34 @@ const NewPrompt = () => {
 
   useEffect(() => {
     endRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, []);
+  }, [question, answer, img.dbData]);
 
+  const add = async (text) => {
+    try {
+      setQuestion(text);
+
+      const result = await model.generateContent(text);
+
+      // Check if result contains response
+      if (result && result.response) {
+        const response = await result.response.text(); // Await the text() method
+        setAnswer(response);
+        console.log(response);
+      } else {
+        console.error('No response found in result');
+      }
+    } catch (error) {
+      console.error('Error generating content:', error);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const text = e.target.text.value;
+    if (!text) return;
+
+    add(text);
+  };
   return (
     <>
       {img.isLoading && <div className=''>Loading...</div>}
@@ -26,17 +56,21 @@ const NewPrompt = () => {
           transformation={[{ width: 380 }]}
         />
       )}
+      {question && <div className='message user'>{question}</div>}
+      {answer && (
+        <div className='message'>
+          <Markdown>{answer}</Markdown>
+        </div>
+      )}
       <div className='endChat' ref={endRef}></div>
-      <div className='newForm'>
-        <form>
-          <Upload setImg={setImg} />
-          <input id='file' type='file' multiple={false} hidden />
-          <input type='text' placeholder='Ask any thing...' />
-          <button>
-            <img src='/arrow.png' alt='' />
-          </button>
-        </form>
-      </div>
+      <form className='newForm' onSubmit={handleSubmit}>
+        <Upload setImg={setImg} />
+        <input id='file' type='file' multiple={false} hidden />
+        <input type='text' name='text' placeholder='Ask any thing...' />
+        <button>
+          <img src='/arrow.png' alt='' />
+        </button>
+      </form>
     </>
   );
 };
