@@ -8,11 +8,11 @@ const NewPrompt = () => {
   const endRef = useRef(null);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
-
   const [img, setImg] = useState({
     isLoading: false,
     error: '',
     dbData: {},
+    aiData: {},
   });
 
   useEffect(() => {
@@ -22,19 +22,32 @@ const NewPrompt = () => {
   const add = async (text) => {
     try {
       setQuestion(text);
+      setAnswer(''); // Clear previous answer
+      setImg({ ...img, isLoading: true }); // Set loading state
 
-      const result = await model.generateContent(text);
+      // Start generating content stream
+      const result = await model.generateContentStream(text);
 
-      // Check if result contains response
-      if (result && result.response) {
-        const response = await result.response.text(); // Await the text() method
-        setAnswer(response);
-        console.log(response);
-      } else {
-        console.error('No response found in result');
+      // Stream each chunk of the response
+      for await (const chunk of result.stream) {
+        const chunkText = await chunk.text(); // Get the chunk text
+        setAnswer((prevAnswer) => prevAnswer + chunkText); // Append chunk to the answer
       }
+
+      setImg({
+        isLoading: false,
+        error: '',
+        dbData: {},
+        aiData: {},
+      });
     } catch (error) {
       console.error('Error generating content:', error);
+      setImg({
+        isLoading: false,
+        error: 'Failed to generate content',
+        dbData: {},
+        aiData: {},
+      });
     }
   };
 
@@ -42,9 +55,9 @@ const NewPrompt = () => {
     e.preventDefault();
     const text = e.target.text.value;
     if (!text) return;
-
     add(text);
   };
+
   return (
     <>
       {img.isLoading && <div className=''>Loading...</div>}
@@ -66,7 +79,7 @@ const NewPrompt = () => {
       <form className='newForm' onSubmit={handleSubmit}>
         <Upload setImg={setImg} />
         <input id='file' type='file' multiple={false} hidden />
-        <input type='text' name='text' placeholder='Ask any thing...' />
+        <input type='text' name='text' placeholder='Ask anything...' />
         <button>
           <img src='/arrow.png' alt='' />
         </button>
