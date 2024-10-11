@@ -9,8 +9,10 @@ import UserChats from './models/userChats.js';
 import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
 
 const port = process.env.PORT || 3000;
-
 const app = express();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.use(
   cors({
@@ -38,10 +40,10 @@ const imagekit = new ImageKit({
 });
 
 app.get('/api/upload', (req, res) => {
-  var result = imagekit.getAuthenticationParameters();
-  console.log(result);
+  const result = imagekit.getAuthenticationParameters();
   res.send(result);
 });
+
 app.post('/api/chats', ClerkExpressRequireAuth(), async (req, res) => {
   const userId = req.auth.userId;
   const { text } = req.body;
@@ -93,6 +95,32 @@ app.post('/api/chats', ClerkExpressRequireAuth(), async (req, res) => {
   }
 });
 
+app.get('/api/userchats', ClerkExpressRequireAuth(), async (req, res) => {
+  const userId = req.auth.userId;
+
+  try {
+    const userChats = await UserChats.find({ userId });
+
+    res.status(200).send(userChats[0].chats);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send('Error fetching userchats!');
+  }
+});
+
+app.get('/api/chats/:id', ClerkExpressRequireAuth(), async (req, res) => {
+  const userId = req.auth.userId;
+
+  try {
+    const chat = await Chat.findOne({ _id: req.params.id, userId });
+
+    res.status(200).send(chat);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send('Error fetching chat!');
+  }
+});
+
 app.put('/api/chats/:id', ClerkExpressRequireAuth(), async (req, res) => {
   const userId = req.auth.userId;
 
@@ -128,20 +156,14 @@ app.use((err, req, res, next) => {
   res.status(401).send('Unauthenticated!');
 });
 
-app.get('/api/userchats', ClerkExpressRequireAuth(), async (req, res) => {
-  const userId = req.auth.userId;
+// PRODUCTION
+app.use(express.static(path.join(__dirname, '../client/dist')));
 
-  try {
-    const userChats = await UserChats.find({ userId });
-
-    res.status(200).send(userChats[0].chats);
-  } catch (err) {
-    console.log(err);
-    res.status(500).send('Error fetching userchats!');
-  }
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
 });
 
 app.listen(port, () => {
   connectDB();
-  console.log(`Server is running on port ${port}`);
+  console.log('Server running on 3000');
 });

@@ -1,5 +1,4 @@
 import './ChatPage.css';
-
 import NewPrompt from '../../components/newPrompt/NewPrompt';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
@@ -28,8 +27,8 @@ const ChatPage = () => {
             ? 'Loading...'
             : error
             ? 'Something went wrong!'
-            : data?.history?.map((message, i) => (
-                <>
+            : data?.history?.map((message) => (
+                <div key={message._id}>
                   {message.img && (
                     <IKImage
                       urlEndpoint={import.meta.env.VITE_IMAGE_KIT_ENDPOINT}
@@ -45,11 +44,10 @@ const ChatPage = () => {
                     className={
                       message.role === 'user' ? 'message user' : 'message'
                     }
-                    key={i}
                   >
                     <Markdown>{message.parts[0].text}</Markdown>
                   </div>
-                </>
+                </div>
               ))}
 
           {data && <NewPrompt data={data} />}

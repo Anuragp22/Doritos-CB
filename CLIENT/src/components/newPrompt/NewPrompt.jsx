@@ -1,11 +1,12 @@
-import Upload from '../upload/upload';
+import { useEffect, useRef, useState } from 'react';
 import './newPrompt.css';
-import { useState, useEffect, useRef } from 'react';
+import Upload from '../upload/upload';
 import { IKImage } from 'imagekitio-react';
 import model from '../../lib/gemini';
 import Markdown from 'react-markdown';
-const NewPrompt = () => {
-  const endRef = useRef(null);
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+const NewPrompt = ({ data }) => {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [img, setImg] = useState({
@@ -15,51 +16,111 @@ const NewPrompt = () => {
     aiData: {},
   });
 
+  // Check if data.history exists, and ensure it's properly formatted
+  const chatHistory = data?.history?.length
+    ? data.history.map(({ role, parts }) => ({
+        role,
+        parts: [{ text: parts[0]?.text || '' }], // Handle potential undefined parts
+      }))
+    : []; // Default to an empty array if no history is present
+
+  const chat = model.startChat({
+    history: chatHistory,
+    generationConfig: {
+      // maxOutputTokens: 100,
+    },
+  });
+
+  const endRef = useRef(null);
+  const formRef = useRef(null);
+
   useEffect(() => {
     endRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [question, answer, img.dbData]);
+  }, [data, question, answer, img.dbData]);
 
-  const add = async (text) => {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      return fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data._id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: question.length ? question : undefined,
+          answer,
+          img: img.dbData?.filePath || undefined,
+        }),
+      }).then((res) => res.json());
+    },
+    onSuccess: () => {
+      queryClient
+        .invalidateQueries({ queryKey: ['chat', data._id] })
+        .then(() => {
+          formRef.current.reset();
+          setQuestion('');
+          setAnswer('');
+          setImg({
+            isLoading: false,
+            error: '',
+            dbData: {},
+            aiData: {},
+          });
+        });
+    },
+    onError: (err) => {
+      console.log(err);
+    },
+  });
+
+  const add = async (text, isInitial) => {
+    if (!isInitial) setQuestion(text);
+
     try {
-      setQuestion(text);
-      setAnswer(''); // Clear previous answer
-      setImg({ ...img, isLoading: true }); // Set loading state
+      const result = await chat.sendMessageStream(
+        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
+      );
 
-      // Start generating content stream
-      const result = await model.generateContentStream(text);
-
-      // Stream each chunk of the response
+      let accumulatedText = '';
       for await (const chunk of result.stream) {
-        const chunkText = await chunk.text(); // Get the chunk text
-        setAnswer((prevAnswer) => prevAnswer + chunkText); // Append chunk to the answer
+        const chunkText = await chunk.text(); // Ensure async processing
+        console.log(chunkText); // Log each chunk to debug
+        accumulatedText += chunkText; // Accumulate chunks
+        setAnswer(accumulatedText); // Set answer progressively
       }
 
-      setImg({
-        isLoading: false,
-        error: '',
-        dbData: {},
-        aiData: {},
-      });
-    } catch (error) {
-      console.error('Error generating content:', error);
-      setImg({
-        isLoading: false,
-        error: 'Failed to generate content',
-        dbData: {},
-        aiData: {},
-      });
+      mutation.mutate();
+    } catch (err) {
+      console.log(err);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     const text = e.target.text.value;
     if (!text) return;
-    add(text);
+
+    add(text, false);
   };
+
+  // IN PRODUCTION WE DON'T NEED IT
+  const hasRun = useRef(false);
+
+  useEffect(() => {
+    if (!hasRun.current) {
+      if (data?.history?.length === 1) {
+        add(data.history[0].parts[0]?.text || '', true); // Handle potential undefined parts
+      }
+    }
+    hasRun.current = true;
+  }, [data]);
 
   return (
     <>
+      {/* ADD NEW CHAT */}
       {img.isLoading && <div className=''>Loading...</div>}
       {img.dbData?.filePath && (
         <IKImage
@@ -76,7 +137,7 @@ const NewPrompt = () => {
         </div>
       )}
       <div className='endChat' ref={endRef}></div>
-      <form className='newForm' onSubmit={handleSubmit}>
+      <form className='newForm' onSubmit={handleSubmit} ref={formRef}>
         <Upload setImg={setImg} />
         <input id='file' type='file' multiple={false} hidden />
         <input type='text' name='text' placeholder='Ask anything...' />
