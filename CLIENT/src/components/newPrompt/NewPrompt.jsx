@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './newPrompt.css';
 import Upload from '../upload/upload';
-import { IKImage } from 'imagekitio-react';
-import model from '../../lib/gemini';
 import Markdown from 'react-markdown';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -17,19 +15,19 @@ const NewPrompt = ({ data }) => {
   });
 
   // Check if data.history exists, and ensure it's properly formatted
-  const chatHistory = data?.history?.length
-    ? data.history.map(({ role, parts }) => ({
-        role,
-        parts: [{ text: parts[0]?.text || '' }], // Handle potential undefined parts
-      }))
-    : []; // Default to an empty array if no history is present
+  // const chatHistory = data?.history?.length
+  //   ? data.history.map(({ role, parts }) => ({
+  //       role,
+  //       parts: [{ text: parts[0]?.text || '' }], // Handle potential undefined parts
+  //     }))
+  //   : []; // Default to an empty array if no history is present
 
-  const chat = model.startChat({
-    history: chatHistory,
-    generationConfig: {
-      // maxOutputTokens: 100,
-    },
-  });
+  // const chat = model.startChat({
+  //   history: chatHistory,
+  //   generationConfig: {
+  //     // maxOutputTokens: 100,
+  //   },
+  // });
 
   const endRef = useRef(null);
   const formRef = useRef(null);
@@ -76,24 +74,45 @@ const NewPrompt = ({ data }) => {
   });
 
   const add = async (text, isInitial) => {
-    if (!isInitial) setQuestion(text);
+    if (!isInitial) setQuestion(text); // Set the user question
 
     try {
-      const result = await chat.sendMessageStream(
-        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
+      console.log('Image URL:', img.dbData.filePath); // Check before forming payload
+
+      const payload = {
+        user_text: text || null,
+        image_url: img.dbData?.filePath || null, // Ensure filePath is used
+      };
+      console.log('Payload:', payload);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/generate`, // Use your backend URL
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        }
       );
 
-      let accumulatedText = '';
-      for await (const chunk of result.stream) {
-        const chunkText = await chunk.text(); // Ensure async processing
-        console.log(chunkText); // Log each chunk to debug
-        accumulatedText += chunkText; // Accumulate chunks
-        setAnswer(accumulatedText); // Set answer progressively
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Request failed with status ${response.status}: ${errorText}`
+        );
       }
 
+      const data = await response.json();
+      const { description } = data; // Extract description or explanation
+
+      setAnswer(description); // Update the answer in the UI
+
+      // Update the conversation history in the database
       mutation.mutate();
     } catch (err) {
-      console.log(err);
+      console.error('Error in add function:', err);
     }
   };
 
@@ -121,13 +140,12 @@ const NewPrompt = ({ data }) => {
   return (
     <>
       {/* ADD NEW CHAT */}
-      {img.isLoading && <div className=''>Loading...</div>}
+      {img.isLoading && <div>Loading...</div>}
       {img.dbData?.filePath && (
-        <IKImage
-          urlEndpoint={import.meta.env.VITE_IMAGE_KIT_ENDPOINT}
-          path={img.dbData?.filePath}
-          width='380'
-          transformation={[{ width: 380 }]}
+        <img
+          src={img.dbData.filePath}
+          alt='Uploaded Preview'
+          style={{ width: '380px' }}
         />
       )}
       {question && <div className='message user'>{question}</div>}
@@ -136,6 +154,7 @@ const NewPrompt = ({ data }) => {
           <Markdown>{answer}</Markdown>
         </div>
       )}
+
       <div className='endChat' ref={endRef}></div>
       <form className='newForm' onSubmit={handleSubmit} ref={formRef}>
         <Upload setImg={setImg} />
