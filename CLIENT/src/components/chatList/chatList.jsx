@@ -14,8 +14,11 @@ const ChatList = () => {
   return (
     <div className='chatList'>
       <Link to='/dashboard'>Create a new Chat</Link>
-      <Link to='/'>Explore Doritos AI</Link>
-      <Link to='/'>Contact</Link>
+      {/* <Link to='/'>Explore Doritos AI</Link>
+      <Link to='/'>Contact</Link> */}
+      <Link to='https://ff7a0470a5d85563c4.gradio.live' target='_blank'>
+        Training
+      </Link>
       <hr />
       <span className='title'>RECENT CHATS</span>
       <div className='list'>
@@ -30,13 +33,13 @@ const ChatList = () => {
             ))}
       </div>
       <hr />
-      <div className='upgrade'>
+      {/* <div className='upgrade'>
         <img src='/logo.png' alt='' />
         <div className='texts'>
           <span>Upgrade to Doritos AI Pro</span>
           <span>Get unlimited access to all features</span>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

@@ -14,21 +14,6 @@ const NewPrompt = ({ data }) => {
     aiData: {},
   });
 
-  // Check if data.history exists, and ensure it's properly formatted
-  // const chatHistory = data?.history?.length
-  //   ? data.history.map(({ role, parts }) => ({
-  //       role,
-  //       parts: [{ text: parts[0]?.text || '' }], // Handle potential undefined parts
-  //     }))
-  //   : []; // Default to an empty array if no history is present
-
-  // const chat = model.startChat({
-  //   history: chatHistory,
-  //   generationConfig: {
-  //     // maxOutputTokens: 100,
-  //   },
-  // });
-
   const endRef = useRef(null);
   const formRef = useRef(null);
 

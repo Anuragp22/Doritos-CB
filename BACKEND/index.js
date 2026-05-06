@@ -1,15 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import url, { fileURLToPath } from 'url';
-import ImageKit from 'imagekit';
+import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import Chat from './models/chat.js';
 import UserChats from './models/userChats.js';
 import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
 import axios from 'axios';
 import multer from 'multer';
-import { Client as MinioClient } from 'minio';
 
 const port = process.env.PORT || 3000;
 const app = express();
@@ -26,7 +24,7 @@ app.use(
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, 'uploads')); // Save uploaded files to 'uploads' directory
+    cb(null, path.join(__dirname, 'uploads'));
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -38,51 +36,15 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-const minioClient = new MinioClient({
-  endPoint: 'minio-s3.ecell-iitkgp.org',
-  port: 443, // Use 80 for HTTP or 443 for HTTPS
-  useSSL: true, // Set to true if using HTTPS
-  accessKey: 'HBSpn8vcobaDeco1n3FY',
-  secretKey: 'FZEvSyJ35l6I1lytQ7r4pIcPFb4MeRch1jB7bRT8',
-});
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-const BUCKET_NAME = 'doritos';
-
-// Serve uploaded files statically
-// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-// Image upload endpoint
 app.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
   }
 
-  const bucketName = 'doritos';
-  const objectName = req.file.filename;
-  const filePath = req.file.path;
-
-  // Upload the file to MinIO
-  minioClient.fPutObject(bucketName, objectName, filePath, (err, etag) => {
-    if (err) {
-      console.error('Error uploading file:', err);
-      return res.status(500).send('Error uploading file.');
-    }
-
-    // Generate a presigned URL for accessing the uploaded file
-    minioClient.presignedUrl(
-      'GET',
-      bucketName,
-      objectName,
-      24 * 60 * 60,
-      (err, presignedUrl) => {
-        if (err) {
-          console.error('Error generating presigned URL:', err);
-          return res.status(500).send('Error generating file URL.');
-        }
-
-        res.json({ fileUrl: presignedUrl });
-      }
-    );
-  });
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  res.json({ fileUrl });
 });
 
 app.use(express.json());
@@ -97,12 +59,6 @@ const connectDB = async () => {
   }
 };
 
-const imagekit = new ImageKit({
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-});
-
 app.post('/api/chats', ClerkExpressRequireAuth(), async (req, res) => {
   const userId = req.auth.userId;
   const { text } = req.body;
@@ -110,7 +66,7 @@ app.post('/api/chats', ClerkExpressRequireAuth(), async (req, res) => {
   try {
     // Send input to Qwen model via Ngrok endpoint
     const qwenResponse = await axios.post(
-      'https://9917-34-171-202-198.ngrok-free.app/generate',
+      'https://822a-34-127-110-18.ngrok-free.app/generate',
       {
         user_text: text,
         image_url: null, // Add logic to handle image URLs if needed
@@ -196,7 +152,7 @@ app.put('/api/chats/:id', ClerkExpressRequireAuth(), async (req, res) => {
   try {
     // Forward question and image URL to the Qwen model
     const qwenResponse = await axios.post(
-      'https://de70-34-171-202-198.ngrok-free.app/generate',
+      'https://822a-34-127-110-18.ngrok-free.app/generate',
       {
         user_text: question,
         image_url: img || null, // Include the image URL if provided
@@ -275,7 +231,7 @@ app.post('/api/generate', async (req, res) => {
 
     // Forward the payload to the Flask app
     const response = await axios.post(
-      'https://de70-34-171-202-198.ngrok-free.app/generate', // Flask app URL
+      'https://822a-34-127-110-18.ngrok-free.app/generate', // Flask app URL
       payload,
       {
         headers: { 'Content-Type': 'application/json' },
