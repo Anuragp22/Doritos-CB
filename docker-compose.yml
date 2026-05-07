@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-doritos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-doritos}
+      POSTGRES_DB: ${POSTGRES_DB:-doritos}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-doritos} -d ${POSTGRES_DB:-doritos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./BACKEND
+    environment:
+      PORT: 3000
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-doritos}:${POSTGRES_PASSWORD:-doritos}@postgres:5432/${POSTGRES_DB:-doritos}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set it in .env}
+      QWEN_API_URL: ${QWEN_API_URL:-http://host.docker.internal:5000/generate}
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+
+  client:
+    build:
+      context: ./CLIENT
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  # The model service requires an NVIDIA GPU. Uncomment the deploy block
+  # below and ensure the NVIDIA Container Toolkit is installed on the host
+  # before running this service. On CPU-only hosts the 2B model will run
+  # but will be very slow and may exhaust memory.
+  model:
+    build: ./MODEL
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5000
+      MODEL_ID: ${MODEL_ID:-Qwen/Qwen2-VL-2B-Instruct}
+    ports:
+      - "5000:5000"
+    profiles:
+      - model
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  postgres_data:
+  backend_uploads:
