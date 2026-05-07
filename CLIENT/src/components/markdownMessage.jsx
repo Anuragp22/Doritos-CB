@@ -1,53 +1,9 @@
-import { memo, useState } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-function CodeBlock({ language, value }) {
-  const [copied, setCopied] = useState(false);
-
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  return (
-    <div className="group relative my-3 overflow-hidden rounded-lg border bg-[#0d1117]">
-      <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
-        <span>{language || 'text'}</span>
-        <button
-          type="button"
-          onClick={onCopy}
-          className="inline-flex items-center gap-1 rounded px-2 py-0.5 transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <SyntaxHighlighter
-        language={language || 'text'}
-        style={oneDark}
-        customStyle={{
-          margin: 0,
-          padding: '0.75rem 1rem',
-          background: 'transparent',
-          fontSize: '0.875rem',
-        }}
-        codeTagProps={{ style: { fontFamily: 'ui-monospace, monospace' } }}
-      >
-        {value}
-      </SyntaxHighlighter>
-    </div>
-  );
-}
+const CodeBlock = lazy(() => import('./codeBlock'));
 
 function detectLanguage(className) {
   if (!className) return null;
@@ -70,7 +26,17 @@ const components = {
         </code>
       );
     }
-    return <CodeBlock language={language} value={value} />;
+    return (
+      <Suspense
+        fallback={
+          <pre className="my-3 overflow-x-auto rounded-lg border bg-[#0d1117] p-3 text-sm">
+            <code>{value}</code>
+          </pre>
+        }
+      >
+        <CodeBlock language={language} value={value} />
+      </Suspense>
+    );
   },
   p: ({ children }) => <p className="my-2 leading-7">{children}</p>,
   ul: ({ children }) => <ul className="my-2 ml-6 list-disc space-y-1">{children}</ul>,
