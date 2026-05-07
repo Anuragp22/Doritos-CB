@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import './newPrompt.css';
-import Upload from '../upload/upload';
-import Markdown from 'react-markdown';
 import { useQueryClient } from '@tanstack/react-query';
-import { readSSEStream } from '../../lib/stream';
+import { ArrowUp, Bot, Loader2, User as UserIcon, X } from 'lucide-react';
+import Upload from '@/components/upload/upload';
+import MarkdownMessage from '@/components/markdownMessage';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { readSSEStream } from '@/lib/stream';
+import { cn } from '@/lib/utils';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -75,33 +78,94 @@ const NewPrompt = ({ data }) => {
     sendTurn(text);
   };
 
+  const cancel = () => controllerRef.current?.abort();
+
   return (
     <>
-      {img.isLoading && <div>Loading…</div>}
-      {img.dbData?.filePath && (
-        <img src={img.dbData.filePath} alt='Uploaded preview' style={{ width: '380px' }} />
-      )}
-      {question && <div className='message user'>{question}</div>}
-      {answer && (
-        <div className='message'>
-          <Markdown>{answer}</Markdown>
+      {img.isLoading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Uploading…
         </div>
       )}
-      {error && <div className='message error'>{error}</div>}
+      {img.dbData?.filePath && (
+        <div className="self-end">
+          <img
+            src={img.dbData.filePath}
+            alt="Uploaded preview"
+            className="max-h-60 max-w-sm rounded-lg border object-cover"
+          />
+        </div>
+      )}
+      {question && (
+        <div className="flex flex-row-reverse gap-3">
+          <Avatar className="size-8 shrink-0 border bg-primary/10">
+            <AvatarFallback className="bg-transparent">
+              <UserIcon className="size-4" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="rounded-2xl bg-accent px-4 py-3 text-sm max-w-[80%]">
+            <p className="whitespace-pre-wrap leading-relaxed">{question}</p>
+          </div>
+        </div>
+      )}
+      {(answer || isStreaming) && (
+        <div className="flex gap-3">
+          <Avatar className="size-8 shrink-0 border bg-accent">
+            <AvatarFallback className="bg-transparent">
+              <Bot className="size-4 text-primary" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="rounded-2xl border bg-card px-4 py-3 text-sm flex-1">
+            {answer ? (
+              <MarkdownMessage>{answer}</MarkdownMessage>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Thinking…
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
-      <div className='endChat' ref={endRef}></div>
-      <form className='newForm' onSubmit={handleSubmit} ref={formRef}>
+      <div ref={endRef} className="pb-32" />
+
+      <form
+        ref={formRef}
+        onSubmit={handleSubmit}
+        className={cn(
+          'fixed bottom-6 left-[calc(280px+1rem)] right-6 mx-auto flex max-w-3xl items-center gap-2 rounded-2xl border bg-card/80 px-3 py-2 shadow-lg backdrop-blur'
+        )}
+      >
         <Upload setImg={setImg} />
-        <input id='file' type='file' multiple={false} hidden />
         <input
-          type='text'
-          name='text'
-          placeholder='Ask anything…'
+          type="text"
+          name="text"
+          placeholder="Ask anything…"
           disabled={isStreaming}
+          className="flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
         />
-        <button type='submit' disabled={isStreaming}>
-          <img src='/arrow.png' alt='' />
-        </button>
+        {isStreaming ? (
+          <Button
+            type="button"
+            onClick={cancel}
+            size="icon"
+            variant="destructive"
+            className="rounded-full"
+          >
+            <X className="size-4" />
+          </Button>
+        ) : (
+          <Button type="submit" size="icon" className="rounded-full">
+            <ArrowUp className="size-4" />
+          </Button>
+        )}
       </form>
     </>
   );

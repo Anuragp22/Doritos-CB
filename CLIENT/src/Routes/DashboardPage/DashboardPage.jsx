@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import Markdown from 'react-markdown';
-import './DashboardPage.css';
-import { readSSEStream } from '../../lib/stream';
+import { ArrowUp, Code2, Image as ImageIcon, MessageSquare, Loader2 } from 'lucide-react';
+import { readSSEStream } from '@/lib/stream';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import MarkdownMessage from '@/components/markdownMessage';
 
 const API = import.meta.env.VITE_API_URL;
+
+const SUGGESTIONS = [
+  { icon: MessageSquare, label: 'Start a conversation' },
+  { icon: ImageIcon, label: 'Analyze an image' },
+  { icon: Code2, label: 'Help with my code' },
+];
 
 const DashboardPage = () => {
   const queryClient = useQueryClient();
@@ -59,50 +67,66 @@ const DashboardPage = () => {
 
   if (isStreaming || streamingAnswer) {
     return (
-      <div className='dashboardPage streaming'>
-        <div className='streamPreview'>
-          <div className='message user'>{submittedText}</div>
-          {streamingAnswer && (
-            <div className='message'>
-              <Markdown>{streamingAnswer}</Markdown>
+      <div className="flex h-full flex-col items-center px-6 py-8">
+        <div className="flex w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto">
+          <div className="self-end max-w-[80%] rounded-2xl bg-accent px-4 py-3 text-sm">
+            {submittedText}
+          </div>
+          {streamingAnswer ? (
+            <Card className="self-start max-w-[90%] gap-0 px-5 py-4">
+              <MarkdownMessage>{streamingAnswer}</MarkdownMessage>
+            </Card>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Thinking…
             </div>
           )}
-          {error && <div className='streamError'>{error}</div>}
+          {error && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className='dashboardPage'>
-      <div className='texts'>
-        <div className='logo'>
-          <img src='/logo.png' alt='' />
-          <h1>DORITOS AI</h1>
+    <div className="flex h-full flex-col items-center px-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-10">
+        <div className="flex items-center gap-4 opacity-90">
+          <img src="/logo.png" alt="" className="size-14" />
+          <h1 className="gradient-text text-5xl font-bold tracking-tight md:text-6xl">
+            DORITOS AI
+          </h1>
         </div>
-        <div className='options'>
-          <div className='option'>
-            <img src='/chat.png' alt='' />
-            <span>Create a New Chat</span>
-          </div>
-          <div className='option'>
-            <img src='/image.png' alt='' />
-            <span>Analyze Images</span>
-          </div>
-          <div className='option'>
-            <img src='/code.png' alt='' />
-            <span>Help me with my Code</span>
-          </div>
+        <div className="grid w-full max-w-3xl grid-cols-1 gap-3 md:grid-cols-3">
+          {SUGGESTIONS.map(({ icon: Icon, label }) => (
+            <Card
+              key={label}
+              className="cursor-pointer items-start gap-3 px-4 py-4 transition-colors hover:bg-accent/40"
+            >
+              <Icon className="size-7 text-muted-foreground" />
+              <span className="text-sm">{label}</span>
+            </Card>
+          ))}
         </div>
       </div>
-      <div className='formContainer'>
-        <form onSubmit={handleSubmit}>
-          <input type='text' name='text' placeholder='Ask me anything...' />
-          <button type='submit'>
-            <img src='/arrow.png' alt='' />
-          </button>
-        </form>
-      </div>
+      <form
+        onSubmit={handleSubmit}
+        className="mb-6 flex w-full max-w-3xl items-center gap-2 rounded-2xl border bg-card/60 px-4 py-2"
+      >
+        <input
+          type="text"
+          name="text"
+          placeholder="Ask anything…"
+          className="flex-1 bg-transparent px-2 py-3 text-sm outline-none placeholder:text-muted-foreground"
+        />
+        <Button type="submit" size="icon" className="rounded-full">
+          <ArrowUp className="size-4" />
+        </Button>
+      </form>
     </div>
   );
 };
