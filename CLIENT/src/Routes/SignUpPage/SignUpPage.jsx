@@ -1,7 +1,18 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import './SignUpPage.css';
-import { useAuth } from '../../lib/auth';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { useAuth } from '@/lib/auth';
 
 const SignUpPage = () => {
   const { register } = useAuth();
@@ -27,48 +38,73 @@ const SignUpPage = () => {
   };
 
   return (
-    <div className='signUpPage'>
-      <form className='authForm' onSubmit={handleSubmit}>
-        <h1>Create an account</h1>
-        {error && <div className='authError'>{error}</div>}
-        <label>
-          Email
-          <input
-            type='email'
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete='email'
-          />
-        </label>
-        <label>
-          Username
-          <input
-            type='text'
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            autoComplete='username'
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type='password'
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            autoComplete='new-password'
-          />
-        </label>
-        <button type='submit' disabled={submitting}>
-          {submitting ? 'Creating…' : 'Sign up'}
-        </button>
-        <p className='authSwitch'>
-          Already have an account? <Link to='/sign-in'>Sign in</Link>
-        </p>
-      </form>
+    <div className="flex h-full items-center justify-center px-4 py-8">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl">Create an account</CardTitle>
+          <CardDescription>Get started with Doritos AI in seconds.</CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="flex flex-col gap-4">
+            {error && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoComplete="username"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-muted-foreground">Minimum 6 characters.</p>
+            </div>
+          </CardContent>
+          <CardFooter className="mt-2 flex flex-col gap-3">
+            <Button type="submit" disabled={submitting} className="w-full">
+              {submitting && <Loader2 className="size-4 animate-spin" />}
+              {submitting ? 'Creating…' : 'Sign up'}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              Already have an account?{' '}
+              <Link
+                to="/sign-in"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                Sign in
+              </Link>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
     </div>
   );
 };
