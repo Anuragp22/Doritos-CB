@@ -1,0 +1,21 @@
+services:
+  backend:
+    command: ["sh", "-c", "npx prisma migrate deploy && npx nodemon index.js"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./BACKEND:/app
+      - /app/node_modules
+      - backend_uploads:/app/uploads
+
+  client:
+    build:
+      context: ./CLIENT
+      target: dev
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    volumes:
+      - ./CLIENT:/app
+      - /app/node_modules

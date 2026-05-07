@@ -1,17 +1,24 @@
-FROM node:20-alpine AS build
+FROM node:20-alpine AS deps
 
 WORKDIR /app
-
-ARG VITE_API_URL=http://localhost:3000
-ENV VITE_API_URL=$VITE_API_URL
 
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
 
+FROM deps AS dev
+COPY . .
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+FROM deps AS build
+
+ARG VITE_API_URL=http://localhost:3000
+ENV VITE_API_URL=$VITE_API_URL
+
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
+FROM nginx:alpine AS prod
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
