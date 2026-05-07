@@ -7,13 +7,14 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String     @id @default(cuid())
+  email     String     @unique
   username  String
   password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   chats     Chat[]
+  documents Document[]
 }
 
 model Chat {
@@ -38,6 +39,31 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([chatId])
+}
+
+model Document {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String
+  createdAt   DateTime        @default(now())
+  chunks      DocumentChunk[]
+
+  @@index([userId])
+}
+
+model DocumentChunk {
+  id         String                       @id @default(cuid())
+  documentId String
+  document   Document                     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  text       String
+  embedding  Unsupported("vector(384)")?
+  tsv        Unsupported("tsvector")?
+  createdAt  DateTime                     @default(now())
+
+  @@index([documentId])
 }
 
 enum Role {
