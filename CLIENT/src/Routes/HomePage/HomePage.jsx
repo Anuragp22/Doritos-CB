@@ -94,13 +94,10 @@ const Homepage = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 text-xs text-muted-foreground">
-        <img src="/logo.png" alt="" className="size-4 opacity-60" />
-        <div className="flex gap-2">
-          <Link to="/" className="hover:text-foreground">Terms of Service</Link>
-          <span>|</span>
-          <Link to="/" className="hover:text-foreground">Privacy Policy</Link>
-        </div>
+      <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2 text-xs text-muted-foreground">
+        <Link to="/" className="hover:text-foreground">Terms of Service</Link>
+        <span>|</span>
+        <Link to="/" className="hover:text-foreground">Privacy Policy</Link>
       </div>
     </div>
   );

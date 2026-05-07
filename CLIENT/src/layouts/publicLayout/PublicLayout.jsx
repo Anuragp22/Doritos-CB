@@ -38,11 +38,8 @@ const PublicLayout = () => {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-border px-6 py-3 md:px-12">
-        <Link to="/" className="flex items-center gap-2 font-serif text-lg font-semibold">
-          <img src="/logo.png" alt="logo" className="size-7" />
-          <span>
-            Doritos <em className="font-normal italic text-primary">AI</em>
-          </span>
+        <Link to="/" className="font-serif text-lg font-semibold tracking-tight">
+          Doritos <em className="font-normal italic text-primary">AI</em>
         </Link>
         <HeaderUser />
       </header>

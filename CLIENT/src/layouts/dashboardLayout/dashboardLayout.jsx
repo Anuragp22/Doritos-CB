@@ -70,11 +70,8 @@ const DashboardLayout = () => {
               <SidebarContents />
             </SheetContent>
           </Sheet>
-          <Link to="/dashboard" className="flex items-center gap-2 font-serif text-base font-semibold">
-            <img src="/logo.png" alt="" className="size-5" />
-            <span>
-              Doritos <em className="font-normal italic text-primary">AI</em>
-            </span>
+          <Link to="/dashboard" className="font-serif text-base font-semibold tracking-tight">
+            Doritos <em className="font-normal italic text-primary">AI</em>
           </Link>
           <span className="size-9" aria-hidden />
         </div>

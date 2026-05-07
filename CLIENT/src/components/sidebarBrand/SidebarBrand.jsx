@@ -4,12 +4,9 @@ const SidebarBrand = ({ className = '' }) => {
   return (
     <Link
       to="/dashboard"
-      className={`flex items-center gap-2 px-3 py-3 font-serif text-base font-semibold ${className}`}
+      className={`px-3 py-3 font-serif text-base font-semibold tracking-tight ${className}`}
     >
-      <img src="/logo.png" alt="" className="size-6" />
-      <span>
-        Doritos <em className="font-normal italic text-primary">AI</em>
-      </span>
+      Doritos <em className="font-normal italic text-primary">AI</em>
     </Link>
   );
 };
