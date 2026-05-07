@@ -13,4 +13,13 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Inotify events do not propagate from Windows hosts into Linux Docker
+  // bind-mounts, so the file watcher never fires. Polling is the only
+  // reliable way for HMR to detect host edits in this setup.
+  server: {
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
+  },
 });
