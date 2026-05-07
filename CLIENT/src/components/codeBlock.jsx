@@ -61,13 +61,13 @@ export default function CodeBlock({ language, value }) {
   };
 
   return (
-    <div className="group relative my-3 overflow-hidden rounded-lg border bg-[#0d1117]">
-      <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+    <div className="group relative my-3 overflow-hidden border border-ink bg-ink">
+      <div className="flex items-center justify-between border-b border-paper/15 bg-paper/5 px-3 py-1.5 font-mono text-xs text-paper/70">
         <span>{language || 'text'}</span>
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex items-center gap-1 rounded px-2 py-0.5 transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="inline-flex items-center gap-1 px-2 py-0.5 transition-colors hover:bg-paper/10 hover:text-paper"
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
           {copied ? 'Copied' : 'Copy'}

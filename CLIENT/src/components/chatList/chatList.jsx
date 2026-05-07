@@ -9,8 +9,8 @@ const navLinkClasses = ({ isActive }) =>
   cn(
     'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
     isActive
-      ? 'bg-accent text-accent-foreground'
-      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+      ? 'bg-ink text-paper'
+      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
   );
 
 const ChatList = () => {
@@ -68,8 +68,8 @@ const ChatList = () => {
                   className={cn(
                     'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
                     active
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                      ? 'bg-ink text-paper'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   )}
                 >
                   <MessageCircle className="size-3.5 shrink-0 opacity-70" />

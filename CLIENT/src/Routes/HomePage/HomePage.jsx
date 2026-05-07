@@ -21,8 +21,8 @@ const Homepage = () => {
             <Sparkles className="size-3" />
             Multimodal · Local · Open
           </div>
-          <h1 className="gradient-text text-5xl font-bold tracking-tight md:text-7xl">
-            DORITOS AI
+          <h1 className="font-serif text-5xl font-bold tracking-tight text-ink md:text-7xl">
+            DORITOS <em className="font-normal italic text-primary">AI</em>
           </h1>
           <h2 className="text-xl font-medium md:text-2xl">
             Supercharge your creativity and productivity
@@ -40,8 +40,8 @@ const Homepage = () => {
         </div>
 
         <div className="flex flex-1 items-center justify-center">
-          <div className="relative flex aspect-square w-full max-w-md items-center justify-center overflow-hidden rounded-3xl bg-[#140e2d]">
-            <div className="absolute inset-0 overflow-hidden rounded-3xl">
+          <div className="relative flex aspect-square w-full max-w-md items-center justify-center overflow-hidden bg-ink">
+            <div className="absolute inset-0 overflow-hidden">
               <div
                 className="size-full opacity-20"
                 style={{

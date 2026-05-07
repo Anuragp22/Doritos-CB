@@ -35,12 +35,12 @@ const DashboardLayout = () => {
 
   return (
     <div className="md:grid md:h-full md:grid-cols-[280px_1fr]">
-      <aside className="hidden h-full border-r border-border/60 bg-card/40 md:block">
+      <aside className="hidden h-full border-r border-border bg-card md:block">
         <ChatList />
       </aside>
 
       <div className="flex h-full flex-col overflow-hidden bg-background">
-        <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 md:hidden">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <Button
               type="button"

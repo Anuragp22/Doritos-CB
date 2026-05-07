@@ -78,7 +78,9 @@ const DocumentsPage = () => {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl px-6 py-8">
         <div className="mb-6 flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold">Documents</h1>
+          <h1 className="font-serif text-3xl font-semibold tracking-tight">
+            Documents
+          </h1>
           <p className="text-sm text-muted-foreground">
             Upload PDFs, Word documents, HTML, or any plain-text or code file.
             They get chunked, embedded, and used to ground future answers via
@@ -107,10 +109,10 @@ const DocumentsPage = () => {
           <CardContent>
             <label
               htmlFor="doc-file"
-              className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-sm transition-colors ${
+              className={`flex cursor-pointer flex-col items-center gap-2 border border-dashed py-10 text-sm transition-colors ${
                 dragOver
-                  ? 'border-primary bg-primary/5 text-foreground'
-                  : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40'
+                  ? 'border-primary bg-primary/10 text-foreground'
+                  : 'border-border bg-muted text-muted-foreground hover:bg-secondary'
               }`}
             >
               {upload.isPending ? (
@@ -151,7 +153,7 @@ const DocumentsPage = () => {
             {data.map((doc) => (
               <li
                 key={doc.id}
-                className="flex items-center justify-between gap-3 rounded-lg border bg-card/40 px-4 py-3"
+                className="flex items-center justify-between gap-3 border border-border bg-card px-4 py-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <FileText className="size-4 shrink-0 text-muted-foreground" />
