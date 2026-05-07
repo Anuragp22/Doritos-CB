@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Loader2, AlertCircle, Bot, User as UserIcon } from 'lucide-react';
 import NewPrompt from '@/components/newPrompt/NewPrompt';
 import MarkdownMessage from '@/components/markdownMessage';
+import Citations from '@/components/citations';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -95,6 +96,7 @@ const ChatPage = () => {
                         <MarkdownMessage>{message.text}</MarkdownMessage>
                       )}
                     </div>
+                    {!isUser && <Citations sources={message.sources} />}
                   </div>
                 </div>
               );

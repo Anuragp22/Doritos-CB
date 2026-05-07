@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, Bot, Loader2, User as UserIcon, X } from 'lucide-react';
 import Upload from '@/components/upload/upload';
 import MarkdownMessage from '@/components/markdownMessage';
+import Citations from '@/components/citations';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { readSSEStream } from '@/lib/stream';
@@ -13,6 +14,7 @@ const API = import.meta.env.VITE_API_URL;
 const NewPrompt = ({ data }) => {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
+  const [sources, setSources] = useState(null);
   const [error, setError] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [img, setImg] = useState({
@@ -39,6 +41,7 @@ const NewPrompt = ({ data }) => {
 
     setQuestion(text);
     setAnswer('');
+    setSources(null);
     setError('');
     setIsStreaming(true);
 
@@ -56,6 +59,7 @@ const NewPrompt = ({ data }) => {
 
       await readSSEStream(res, (event) => {
         if (event.text) setAnswer((prev) => prev + event.text);
+        else if (event.sources) setSources(event.sources);
         else if (event.error) setError(event.error);
       });
 
@@ -63,6 +67,7 @@ const NewPrompt = ({ data }) => {
       formRef.current?.reset();
       setQuestion('');
       setAnswer('');
+      setSources(null);
       setImg({ isLoading: false, error: '', dbData: {}, aiData: {} });
     } catch (err) {
       if (err.name !== 'AbortError') setError(err.message);
@@ -116,15 +121,18 @@ const NewPrompt = ({ data }) => {
               <Bot className="size-4 text-primary" />
             </AvatarFallback>
           </Avatar>
-          <div className="rounded-2xl border bg-card px-4 py-3 text-sm flex-1">
-            {answer ? (
-              <MarkdownMessage>{answer}</MarkdownMessage>
-            ) : (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Thinking…
-              </div>
-            )}
+          <div className="flex flex-1 flex-col gap-1">
+            <div className="rounded-2xl border bg-card px-4 py-3 text-sm">
+              {answer ? (
+                <MarkdownMessage>{answer}</MarkdownMessage>
+              ) : (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Thinking…
+                </div>
+              )}
+            </div>
+            <Citations sources={sources} />
           </div>
         </div>
       )}

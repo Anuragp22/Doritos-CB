@@ -6,6 +6,7 @@ import { readSSEStream } from '@/lib/stream';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import MarkdownMessage from '@/components/markdownMessage';
+import Citations from '@/components/citations';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -21,6 +22,7 @@ const DashboardPage = () => {
 
   const [submittedText, setSubmittedText] = useState('');
   const [streamingAnswer, setStreamingAnswer] = useState('');
+  const [streamingSources, setStreamingSources] = useState(null);
   const [error, setError] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -37,6 +39,7 @@ const DashboardPage = () => {
 
     setSubmittedText(text);
     setStreamingAnswer('');
+    setStreamingSources(null);
     setError('');
     setIsStreaming(true);
 
@@ -53,6 +56,7 @@ const DashboardPage = () => {
       await readSSEStream(res, (event) => {
         if (event.chatId) chatId = event.chatId;
         else if (event.text) setStreamingAnswer((prev) => prev + event.text);
+        else if (event.sources) setStreamingSources(event.sources);
         else if (event.error) setError(event.error);
       });
 
@@ -73,9 +77,12 @@ const DashboardPage = () => {
             {submittedText}
           </div>
           {streamingAnswer ? (
-            <Card className="self-start max-w-[90%] gap-0 px-5 py-4">
-              <MarkdownMessage>{streamingAnswer}</MarkdownMessage>
-            </Card>
+            <div className="flex max-w-[90%] flex-col gap-1 self-start">
+              <Card className="gap-0 px-5 py-4">
+                <MarkdownMessage>{streamingAnswer}</MarkdownMessage>
+              </Card>
+              <Citations sources={streamingSources} />
+            </div>
           ) : (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
