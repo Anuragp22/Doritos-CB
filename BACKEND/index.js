@@ -2,15 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import mongoose from 'mongoose';
 import axios from 'axios';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 
-import Chat from './models/chat.js';
-import UserChats from './models/userChats.js';
-import User from './models/user.js';
+import prisma from './lib/prisma.js';
 import { requireAuth, signToken, cookieOptions } from './middleware/auth.js';
 
 const port = process.env.PORT || 3000;
@@ -18,6 +15,10 @@ const QWEN_API_URL = process.env.QWEN_API_URL;
 
 if (!process.env.JWT_SECRET) {
   console.error('Missing JWT_SECRET in environment.');
+  process.exit(1);
+}
+if (!process.env.DATABASE_URL) {
+  console.error('Missing DATABASE_URL in environment.');
   process.exit(1);
 }
 if (!QWEN_API_URL) {
@@ -65,15 +66,19 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
   try {
-    const existing = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) return res.status(409).json({ error: 'Email already registered' });
 
     const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({ email, username, password: hash });
+    const user = await prisma.user.create({
+      data: { email: normalizedEmail, username, password: hash },
+      select: { id: true, email: true, username: true },
+    });
 
-    const token = signToken(user._id.toString());
+    const token = signToken(user.id);
     res.cookie('token', token, cookieOptions());
-    res.status(201).json({ id: user._id, email: user.email, username: user.username });
+    res.status(201).json(user);
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Registration failed' });
@@ -86,15 +91,15 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'email and password required' });
   }
   try {
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const token = signToken(user._id.toString());
+    const token = signToken(user.id);
     res.cookie('token', token, cookieOptions());
-    res.json({ id: user._id, email: user.email, username: user.username });
+    res.json({ id: user.id, email: user.email, username: user.username });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
@@ -107,9 +112,12 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, async (req, res) => {
-  const user = await User.findById(req.userId).select('email username');
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId },
+    select: { id: true, email: true, username: true },
+  });
   if (!user) return res.status(401).json({ error: 'Unauthenticated' });
-  res.json({ id: user._id, email: user.email, username: user.username });
+  res.json(user);
 });
 
 // ─── Uploads ──────────────────────────────────────────────────────────
@@ -123,8 +131,8 @@ app.post('/upload', requireAuth, upload.single('file'), (req, res) => {
 // ─── Chats ────────────────────────────────────────────────────────────
 
 app.post('/api/chats', requireAuth, async (req, res) => {
-  const userId = req.userId;
   const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
 
   try {
     const qwenResponse = await axios.post(QWEN_API_URL, {
@@ -133,29 +141,21 @@ app.post('/api/chats', requireAuth, async (req, res) => {
     });
     const answer = qwenResponse.data.description;
 
-    const newChat = new Chat({
-      userId,
-      history: [
-        { role: 'user', parts: [{ text }] },
-        { role: 'model', parts: [{ text: answer }] },
-      ],
+    const chat = await prisma.chat.create({
+      data: {
+        userId: req.userId,
+        title: text.substring(0, 40),
+        messages: {
+          create: [
+            { role: 'user', text },
+            { role: 'model', text: answer },
+          ],
+        },
+      },
+      select: { id: true },
     });
-    const savedChat = await newChat.save();
 
-    const userChats = await UserChats.find({ userId });
-    if (!userChats.length) {
-      await new UserChats({
-        userId,
-        chats: [{ _id: savedChat._id, title: text.substring(0, 40) }],
-      }).save();
-    } else {
-      await UserChats.updateOne(
-        { userId },
-        { $push: { chats: { _id: savedChat._id, title: text.substring(0, 40) } } }
-      );
-    }
-
-    res.status(201).send(savedChat._id);
+    res.status(201).json({ id: chat.id });
   } catch (err) {
     console.error('Create chat error:', err.message);
     res.status(500).json({ error: 'Error creating chat' });
@@ -164,8 +164,12 @@ app.post('/api/chats', requireAuth, async (req, res) => {
 
 app.get('/api/userchats', requireAuth, async (req, res) => {
   try {
-    const userChats = await UserChats.find({ userId: req.userId });
-    res.status(200).json(userChats[0]?.chats || []);
+    const chats = await prisma.chat.findMany({
+      where: { userId: req.userId },
+      select: { id: true, title: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(chats);
   } catch (err) {
     console.error('Fetch userchats error:', err);
     res.status(500).json({ error: 'Error fetching userchats' });
@@ -174,9 +178,12 @@ app.get('/api/userchats', requireAuth, async (req, res) => {
 
 app.get('/api/chats/:id', requireAuth, async (req, res) => {
   try {
-    const chat = await Chat.findOne({ _id: req.params.id, userId: req.userId });
+    const chat = await prisma.chat.findFirst({
+      where: { id: req.params.id, userId: req.userId },
+      include: { messages: { orderBy: { createdAt: 'asc' } } },
+    });
     if (!chat) return res.status(404).json({ error: 'Chat not found' });
-    res.status(200).json(chat);
+    res.json(chat);
   } catch (err) {
     console.error('Fetch chat error:', err);
     res.status(500).json({ error: 'Error fetching chat' });
@@ -185,23 +192,29 @@ app.get('/api/chats/:id', requireAuth, async (req, res) => {
 
 app.put('/api/chats/:id', requireAuth, async (req, res) => {
   const { question, img } = req.body;
+  if (!question) return res.status(400).json({ error: 'question required' });
+
   try {
+    const chat = await prisma.chat.findFirst({
+      where: { id: req.params.id, userId: req.userId },
+      select: { id: true },
+    });
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+
     const qwenResponse = await axios.post(QWEN_API_URL, {
       user_text: question,
       image_url: img || null,
     });
     const answer = qwenResponse.data.description;
 
-    const newItems = [
-      { role: 'user', parts: [{ text: question }], img: img || null },
-      { role: 'model', parts: [{ text: answer }] },
-    ];
+    await prisma.message.createMany({
+      data: [
+        { chatId: chat.id, role: 'user', text: question, imageUrl: img || null },
+        { chatId: chat.id, role: 'model', text: answer },
+      ],
+    });
 
-    const updatedChat = await Chat.updateOne(
-      { _id: req.params.id, userId: req.userId },
-      { $push: { history: { $each: newItems } } }
-    );
-    res.status(200).json(updatedChat);
+    res.json({ ok: true });
   } catch (err) {
     console.error('Update chat error:', err.message);
     res.status(500).json({ error: 'Error updating chat' });
@@ -237,17 +250,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-const connectDB = async () => {
+const start = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('MongoDB connection successful');
+    await prisma.$connect();
+    console.log('Connected to PostgreSQL');
   } catch (error) {
-    console.error('MongoDB connection failed:', error.message);
+    console.error('Database connection failed:', error.message);
     process.exit(1);
   }
+  app.listen(port, () => console.log(`Server running on ${port}`));
 };
 
-app.listen(port, () => {
-  connectDB();
-  console.log(`Server running on ${port}`);
-});
+start();
