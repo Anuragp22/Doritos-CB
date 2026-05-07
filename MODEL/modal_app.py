@@ -31,9 +31,12 @@ Cost / efficiency knobs
   across cold starts so we never re-download Qwen2-VL or BGE.
 """
 
+from pathlib import Path
+
 import modal
 
 APP_NAME = "doritos-ai-model"
+MODEL_DIR = Path(__file__).resolve().parent
 
 # Official AWQ 4-bit checkpoint. ~1.5 GB on disk, ~3 GB VRAM at runtime.
 # Override via the MODEL_ID env var (e.g. for the unquantized 2B or a 7B-AWQ).
@@ -49,9 +52,9 @@ hf_cache = modal.Volume.from_name("doritos-hf-cache", create_if_missing=True)
 # for the quantized model kernels.
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .pip_install_from_requirements("MODEL/requirements.txt")
+    .pip_install_from_requirements(str(MODEL_DIR / "requirements.txt"))
     .pip_install("autoawq>=0.2.6")
-    .add_local_dir("MODEL", "/app")
+    .add_local_dir(str(MODEL_DIR), "/app")
 )
 
 
