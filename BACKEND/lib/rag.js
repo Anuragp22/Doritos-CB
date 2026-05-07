@@ -1,9 +1,11 @@
 import prisma from './prisma.js';
 import { embed } from './embed.js';
+import { rerank } from './rerank.js';
 
-const VECTOR_CANDIDATES = 20;
-const FTS_CANDIDATES = 20;
+const VECTOR_CANDIDATES = 30;
+const FTS_CANDIDATES = 30;
 const RRF_K = 60;
+const RRF_FAN_OUT = 20;
 const TOP_K = 5;
 
 export async function hybridRetrieve(query, userId, topK = TOP_K) {
@@ -12,7 +14,7 @@ export async function hybridRetrieve(query, userId, topK = TOP_K) {
 
   const vectorLiteral = `[${embedding.join(',')}]`;
 
-  const rows = await prisma.$queryRaw`
+  const candidates = await prisma.$queryRaw`
     WITH semantic AS (
       SELECT c.id,
              ROW_NUMBER() OVER (ORDER BY c.embedding <=> ${vectorLiteral}::vector) AS r
@@ -46,10 +48,18 @@ export async function hybridRetrieve(query, userId, topK = TOP_K) {
     LEFT JOIN fts f ON f.id = c.id
     WHERE s.id IS NOT NULL OR f.id IS NOT NULL
     ORDER BY score DESC
-    LIMIT ${topK};
+    LIMIT ${RRF_FAN_OUT};
   `;
 
-  return rows;
+  if (candidates.length === 0) return [];
+  if (candidates.length <= topK) return candidates;
+
+  try {
+    return await rerank(query, candidates, topK);
+  } catch (err) {
+    console.warn('Reranking failed, falling back to RRF order:', err.message);
+    return candidates.slice(0, topK);
+  }
 }
 
 export function buildAugmentedPrompt(query, retrievedChunks) {

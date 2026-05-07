@@ -20,11 +20,12 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from qwen_vl_utils import process_vision_info
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder, SentenceTransformer
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
 DEFAULT_MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2-VL-2B-Instruct")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "BAAI/bge-small-en-v1.5")
+RERANK_MODEL_ID = os.getenv("RERANK_MODEL_ID", "BAAI/bge-reranker-base")
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "5000"))
 
@@ -37,6 +38,8 @@ _state: dict = {
     "model_id": None,
     "embed_model": None,
     "embed_model_id": None,
+    "rerank_model": None,
+    "rerank_model_id": None,
 }
 
 
@@ -59,6 +62,13 @@ def _load_embed(model_id: str) -> None:
     print("Embedding model ready.")
 
 
+def _load_rerank(model_id: str) -> None:
+    print(f"Loading reranker from {model_id} on {DEVICE}...")
+    _state["rerank_model"] = CrossEncoder(model_id, device=DEVICE)
+    _state["rerank_model_id"] = model_id
+    print("Reranker ready.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -69,6 +79,10 @@ async def lifespan(app: FastAPI):
         _load_embed(EMBED_MODEL_ID)
     except Exception as exc:
         print(f"Embedding load failed; /embed will return 503. Reason: {exc}")
+    try:
+        _load_rerank(RERANK_MODEL_ID)
+    except Exception as exc:
+        print(f"Reranker load failed; /rerank will return 503. Reason: {exc}")
     yield
     _state.clear()
 
@@ -98,12 +112,24 @@ class EmbedResponse(BaseModel):
     embeddings: List[List[float]]
 
 
+class RerankRequest(BaseModel):
+    query: str
+    documents: List[str]
+    top_k: int = 5
+
+
+class RerankResponse(BaseModel):
+    indices: List[int]
+    scores: List[float]
+
+
 @app.get("/")
 def health() -> dict:
     return {
         "status": "running",
         "model_id": _state["model_id"],
         "embed_model_id": _state["embed_model_id"],
+        "rerank_model_id": _state["rerank_model_id"],
         "device": DEVICE,
     }
 
@@ -164,6 +190,21 @@ def embed(req: EmbedRequest) -> EmbedResponse:
         convert_to_numpy=True,
     )
     return EmbedResponse(embeddings=vectors.tolist())
+
+
+@app.post("/rerank", response_model=RerankResponse)
+def rerank(req: RerankRequest) -> RerankResponse:
+    if _state["rerank_model"] is None:
+        raise HTTPException(503, "Reranker not loaded.")
+    if not req.documents:
+        return RerankResponse(indices=[], scores=[])
+    pairs = [(req.query, doc) for doc in req.documents]
+    scores = _state["rerank_model"].predict(pairs).tolist()
+    ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[: req.top_k]
+    return RerankResponse(
+        indices=[i for i, _ in ranked],
+        scores=[float(s) for _, s in ranked],
+    )
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set it in .env}
       QWEN_API_URL: ${QWEN_API_URL:-http://host.docker.internal:5000/generate}
       EMBED_API_URL: ${EMBED_API_URL:-http://host.docker.internal:5000/embed}
+      RERANK_API_URL: ${RERANK_API_URL:-http://host.docker.internal:5000/rerank}
       NODE_ENV: ${NODE_ENV:-production}
     ports:
       - "3000:3000"

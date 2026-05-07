@@ -97,6 +97,26 @@ The default model is `BAAI/bge-small-en-v1.5` (384 dims). Override with the
 `EMBED_MODEL_ID` environment variable; the dimension must match the
 `vector(N)` column on the database (`DocumentChunk.embedding`).
 
+### `POST /rerank`
+
+```json
+{
+  "query": "what is the migration freeze date",
+  "documents": ["chunk text 1", "chunk text 2", "chunk text 3"],
+  "top_k": 5
+}
+```
+
+Returns the indices and scores of the most relevant documents:
+
+```json
+{ "indices": [2, 0, 1], "scores": [4.21, 1.05, -0.34] }
+```
+
+Powered by `BAAI/bge-reranker-base` (cross-encoder). Scores are unnormalized
+logits — higher is more relevant. Override the model with
+`RERANK_MODEL_ID`.
+
 ## Registering a training dataset
 
 ```bash
