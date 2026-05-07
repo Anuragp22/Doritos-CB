@@ -3,26 +3,28 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(0.16 0.02 270);
-  --foreground: oklch(0.95 0.01 270);
-  --card: oklch(0.19 0.02 270);
-  --card-foreground: oklch(0.95 0.01 270);
-  --popover: oklch(0.19 0.02 270);
-  --popover-foreground: oklch(0.95 0.01 270);
-  --primary: oklch(0.62 0.22 270);
-  --primary-foreground: oklch(0.98 0.01 270);
-  --secondary: oklch(0.26 0.02 270);
-  --secondary-foreground: oklch(0.95 0.01 270);
-  --muted: oklch(0.24 0.02 270);
-  --muted-foreground: oklch(0.7 0.02 270);
-  --accent: oklch(0.28 0.04 285);
-  --accent-foreground: oklch(0.98 0.01 270);
-  --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.98 0.01 25);
-  --border: oklch(0.28 0.02 270);
-  --input: oklch(0.22 0.02 270);
-  --ring: oklch(0.62 0.22 270);
-  --radius: 0.625rem;
+  --background: #f4ede1;
+  --foreground: #1a2238;
+  --card: #ece1cf;
+  --card-foreground: #1a2238;
+  --popover: #f4ede1;
+  --popover-foreground: #1a2238;
+  --primary: #c25e2c;
+  --primary-foreground: #f4ede1;
+  --secondary: #ece1cf;
+  --secondary-foreground: #1a2238;
+  --muted: #e8dfd0;
+  --muted-foreground: #4a5168;
+  --accent: #e8dfd0;
+  --accent-foreground: #1a2238;
+  --destructive: #9b3a1a;
+  --destructive-foreground: #f4ede1;
+  --border: #d0c9be;
+  --input: #d0c9be;
+  --ring: #c25e2c;
+  --radius: 0;
+  --ink: #1a2238;
+  --paper: #f4ede1;
 }
 
 @theme inline {
@@ -45,10 +47,15 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: var(--radius);
 }
 
 @layer base {
@@ -63,9 +70,8 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-      Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue',
-      sans-serif;
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont,
+      'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
