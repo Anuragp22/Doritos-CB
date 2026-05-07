@@ -8,6 +8,9 @@ import RootLayout from './layouts/rootLayout/rootLayout';
 const HomePage = lazy(() => import('./Routes/HomePage/HomePage'));
 const SignInPage = lazy(() => import('./Routes/SignInPage/SignInPage'));
 const SignUpPage = lazy(() => import('./Routes/SignUpPage/SignUpPage'));
+const PublicLayout = lazy(() =>
+  import('./layouts/publicLayout/PublicLayout')
+);
 const DashboardLayout = lazy(() =>
   import('./layouts/dashboardLayout/dashboardLayout')
 );
@@ -33,9 +36,14 @@ const router = createBrowserRouter([
   {
     element: <RootLayout />,
     children: [
-      { path: '/', element: withSuspense(<HomePage />) },
-      { path: '/sign-in/*', element: withSuspense(<SignInPage />) },
-      { path: '/sign-up', element: withSuspense(<SignUpPage />) },
+      {
+        element: withSuspense(<PublicLayout />),
+        children: [
+          { path: '/', element: withSuspense(<HomePage />) },
+          { path: '/sign-in/*', element: withSuspense(<SignInPage />) },
+          { path: '/sign-up', element: withSuspense(<SignUpPage />) },
+        ],
+      },
       {
         element: withSuspense(<DashboardLayout />),
         children: [

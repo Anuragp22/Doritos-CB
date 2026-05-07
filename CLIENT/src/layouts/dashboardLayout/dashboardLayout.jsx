@@ -34,7 +34,7 @@ const DashboardLayout = () => {
   }
 
   return (
-    <div className="md:grid md:h-full md:grid-cols-[280px_1fr]">
+    <div className="flex h-screen flex-col md:grid md:grid-cols-[280px_1fr]">
       <aside className="hidden h-full border-r border-border bg-card md:block">
         <ChatList />
       </aside>
