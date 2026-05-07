@@ -147,6 +147,8 @@ you point the Express backend at via `QWEN_API_URL` / `EMBED_API_URL` /
 
 ## Training
 
+### Path A — local Gradio Web UI
+
 Clone LLaMA-Factory and run training with the registered dataset:
 
 ```bash
@@ -166,3 +168,31 @@ Then point the inference server at the resulting checkpoint:
 ```bash
 MODEL_ID=./LLaMA-Factory/checkpoints/custard_v1 python server.py
 ```
+
+### Path B — Modal headless training (no local GPU required)
+
+The `train.py` Modal app fine-tunes on a Modal A10G and writes the merged
+checkpoint to the same `doritos-hf-cache` volume that `modal_app.py` reads
+from, so inference picks up the new weights on the next deploy.
+
+```bash
+# 1. Push your ShareGPT-format dataset to the dataset volume (one time):
+modal volume put doritos-datasets ./datasets/custard_v1.json /custard_v1.json
+modal volume put doritos-datasets ./datasets/custard_v1_images.zip /custard_v1_images.zip
+
+# 2. Run training:
+modal run MODEL/train.py \
+    --dataset-name custard_v1 \
+    --json-filename custard_v1.json \
+    --zip-filename custard_v1_images.zip \
+    --epochs 3
+
+# 3. Point inference at the merged checkpoint:
+#    Edit MODEL/modal_app.py:
+#       DEFAULT_MODEL_ID = "/root/.cache/huggingface/models/custard_v1"
+#    Then redeploy:
+modal deploy MODEL/modal_app.py
+```
+
+Cheaper alternative: pass `--qlora True --gpu T4` for 4-bit QLoRA on a T4
+(slower per step but ~half the GPU cost).
