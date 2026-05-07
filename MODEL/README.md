@@ -44,7 +44,8 @@ Override with environment variables:
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `MODEL_ID` | `Qwen/Qwen2-VL-2B-Instruct` | HuggingFace repo id or local checkpoint path. |
+| `MODEL_ID` | `Qwen/Qwen2-VL-2B-Instruct` | HuggingFace repo id or local checkpoint path for the VLM. |
+| `EMBED_MODEL_ID` | `BAAI/bge-small-en-v1.5` | Sentence-transformer model for `/embed` (must match the vector(N) DB column). |
 | `HOST` | `127.0.0.1` | Bind address. |
 | `PORT` | `5000` | Bind port. |
 
@@ -79,6 +80,22 @@ At least one of `user_text` or `image_url` must be provided. `max_new_tokens` de
 ```
 
 Reloads the server with a different checkpoint. Accepts a HuggingFace repo id or a local directory path.
+
+### `POST /embed`
+
+```json
+{ "inputs": ["first chunk of text", "second chunk"] }
+```
+
+Returns L2-normalized 384-dimensional embeddings:
+
+```json
+{ "embeddings": [[0.012, -0.054, ...], [0.031, 0.008, ...]] }
+```
+
+The default model is `BAAI/bge-small-en-v1.5` (384 dims). Override with the
+`EMBED_MODEL_ID` environment variable; the dimension must match the
+`vector(N)` column on the database (`DocumentChunk.embedding`).
 
 ## Registering a training dataset
 

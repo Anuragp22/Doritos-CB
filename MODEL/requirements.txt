@@ -5,3 +5,4 @@ transformers>=4.45
 accelerate>=0.34
 qwen-vl-utils[decord]>=0.0.8
 pillow>=10
+sentence-transformers>=3.0
