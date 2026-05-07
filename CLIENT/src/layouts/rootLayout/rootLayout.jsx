@@ -1,7 +1,9 @@
 import { Link, Outlet } from 'react-router-dom';
-import './rootLayout.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider, useAuth } from '../../lib/auth';
+import { LogOut } from 'lucide-react';
+import { AuthProvider, useAuth } from '@/lib/auth';
+import { Button } from '@/components/ui/button';
+import { Toaster } from '@/components/ui/sonner';
 
 const queryClient = new QueryClient();
 
@@ -11,17 +13,24 @@ const HeaderUser = () => {
 
   if (!user) {
     return (
-      <div className='authLinks'>
-        <Link to='/sign-in'>Sign in</Link>
-        <Link to='/sign-up' className='primary'>Sign up</Link>
+      <div className="flex items-center gap-2 text-sm">
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/sign-in">Sign in</Link>
+        </Button>
+        <Button asChild size="sm">
+          <Link to="/sign-up">Sign up</Link>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className='authLinks'>
-      <span className='username'>{user.username}</span>
-      <button type='button' onClick={logout}>Logout</button>
+    <div className="flex items-center gap-3 text-sm">
+      <span className="text-muted-foreground">{user.username}</span>
+      <Button type="button" variant="outline" size="sm" onClick={logout}>
+        <LogOut className="size-3.5" />
+        Logout
+      </Button>
     </div>
   );
 };
@@ -30,20 +39,19 @@ const RootLayout = () => {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <div className='rootLayout'>
-          <header className='header'>
-            <Link className='logo' to='/'>
-              <img src='/logo.png' alt='logo' />
+        <div className="flex h-screen flex-col">
+          <header className="flex items-center justify-between border-b border-border/60 px-6 py-3 md:px-12">
+            <Link to="/" className="flex items-center gap-2 font-semibold">
+              <img src="/logo.png" alt="logo" className="size-8" />
               <span>DORITOS AI</span>
             </Link>
-            <div className='user'>
-              <HeaderUser />
-            </div>
+            <HeaderUser />
           </header>
-          <main className='main'>
+          <main className="flex-1 overflow-hidden">
             <Outlet />
           </main>
         </div>
+        <Toaster position="top-right" richColors />
       </QueryClientProvider>
     </AuthProvider>
   );
