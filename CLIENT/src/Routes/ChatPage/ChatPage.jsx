@@ -26,18 +26,17 @@ const ChatPage = () => {
             ? 'Loading...'
             : error
             ? 'Something went wrong!'
-            : data?.history?.map((message) => (
-                <div key={message._id}>
-                  {/* Render image if available */}
-                  {message.img && (
+            : data?.messages?.map((message) => (
+                <div key={message.id}>
+                  {message.imageUrl && (
                     <img
-                      src={message.img} // Directly use the `img` URL from the message
+                      src={message.imageUrl}
                       alt='Chat Message Attachment'
                       style={{
                         height: '300px',
                         width: '400px',
                         objectFit: 'cover',
-                      }} // Adjust styles as needed
+                      }}
                       loading='lazy'
                     />
                   )}
@@ -46,7 +45,7 @@ const ChatPage = () => {
                       message.role === 'user' ? 'message user' : 'message'
                     }
                   >
-                    <Markdown>{message.parts[0].text}</Markdown>
+                    <Markdown>{message.text}</Markdown>
                   </div>
                 </div>
               ))}

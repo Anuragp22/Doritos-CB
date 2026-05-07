@@ -22,7 +22,7 @@ const ChatList = () => {
           : error
           ? 'Something went wrong!'
           : data?.map((chat) => (
-              <Link to={`/dashboard/chats/${chat._id}`} key={chat._id}>
+              <Link to={`/dashboard/chats/${chat.id}`} key={chat.id}>
                 {chat.title}
               </Link>
             ))}

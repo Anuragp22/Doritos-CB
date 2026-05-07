@@ -18,10 +18,9 @@ const DashboardPage = () => {
         body: JSON.stringify({ text }),
       }).then((res) => res.json());
     },
-    onSuccess: (id) => {
-      // Invalidate and refetch
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['userChats'] });
-      navigate(`/dashboard/chats/${id}`);
+      navigate(`/dashboard/chats/${data.id}`);
     },
   });
 

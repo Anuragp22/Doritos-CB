@@ -25,7 +25,7 @@ const NewPrompt = ({ data }) => {
 
   const mutation = useMutation({
     mutationFn: () => {
-      return fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data._id}`, {
+      return fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data.id}`, {
         method: 'PUT',
         credentials: 'include',
         headers: {
@@ -40,7 +40,7 @@ const NewPrompt = ({ data }) => {
     },
     onSuccess: () => {
       queryClient
-        .invalidateQueries({ queryKey: ['chat', data._id] })
+        .invalidateQueries({ queryKey: ['chat', data.id] })
         .then(() => {
           formRef.current.reset();
           setQuestion('');
@@ -115,8 +115,8 @@ const NewPrompt = ({ data }) => {
 
   useEffect(() => {
     if (!hasRun.current) {
-      if (data?.history?.length === 1) {
-        add(data.history[0].parts[0]?.text || '', true); // Handle potential undefined parts
+      if (data?.messages?.length === 1) {
+        add(data.messages[0].text || '', true);
       }
     }
     hasRun.current = true;
