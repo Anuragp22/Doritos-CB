@@ -129,6 +129,22 @@ python register_dataset.py custard_v1 \
 This copies the JSON next to the extracted images and updates
 `dataset_info.json` so `llamafactory-cli train` can find the dataset by name.
 
+## Hosting on Modal (serverless GPU)
+
+For cheap pay-per-second GPU hosting, deploy `server.py` to [Modal](https://modal.com)
+via the wrapper at `modal_app.py`:
+
+```bash
+pip install modal
+modal token new                       # one-time auth
+modal deploy MODEL/modal_app.py
+```
+
+Defaults to `Qwen/Qwen2-VL-2B-Instruct-AWQ` on a T4 GPU with a persistent
+HuggingFace cache. Scales to zero when idle. After deploy, Modal prints a URL
+you point the Express backend at via `QWEN_API_URL` / `EMBED_API_URL` /
+`RERANK_API_URL`.
+
 ## Training
 
 Clone LLaMA-Factory and run training with the registered dataset:
