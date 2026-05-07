@@ -320,16 +320,21 @@ app.post('/api/chats', requireAuth, async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
 
+  // Kick off chat creation and retrieval concurrently. Client gets the
+  // chatId as soon as the DB returns; retrieval keeps running in parallel.
+  const chatPromise = prisma.chat.create({
+    data: {
+      userId: req.userId,
+      title: text.substring(0, 40),
+      messages: { create: [{ role: 'user', text }] },
+    },
+    select: { id: true },
+  });
+  const retrievedPromise = retrieveContext(text, req.userId);
+
   let chat;
   try {
-    chat = await prisma.chat.create({
-      data: {
-        userId: req.userId,
-        title: text.substring(0, 40),
-        messages: { create: [{ role: 'user', text }] },
-      },
-      select: { id: true },
-    });
+    chat = await chatPromise;
   } catch (err) {
     console.error('Create chat error:', err.message);
     return res.status(500).json({ error: 'Error creating chat' });
@@ -339,7 +344,7 @@ app.post('/api/chats', requireAuth, async (req, res) => {
   sendSSE(res, { chatId: chat.id });
 
   try {
-    const retrieved = await retrieveContext(text, req.userId);
+    const retrieved = await retrievedPromise;
     const augmented = buildAugmentedPrompt(text, retrieved);
 
     const fullText = await streamFromModel(res, [
@@ -396,26 +401,29 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
   });
   if (!chat) return res.status(404).json({ error: 'Chat not found' });
 
-  let userMessage;
+  // Load history (excluding the new turn) sequentially; this is fast and we
+  // need a stable view that does not race with the user-message insert.
+  let history;
   try {
-    userMessage = await prisma.message.create({
-      data: { chatId: chat.id, role: 'user', text: question, imageUrl: img || null },
-    });
+    history = await loadHistoryMessages(chat.id);
   } catch (err) {
-    console.error('Save user message error:', err.message);
-    return res.status(500).json({ error: 'Error saving user message' });
+    console.error('Load history error:', err.message);
+    return res.status(500).json({ error: 'Error loading chat history' });
   }
+
+  // Save the new user message and run retrieval in parallel — the slow
+  // operations both block the model call but are independent of each other.
+  const savePromise = prisma.message.create({
+    data: { chatId: chat.id, role: 'user', text: question, imageUrl: img || null },
+  });
+  const retrievedPromise = retrieveContext(question, req.userId);
 
   setupSSE(res);
 
   try {
-    const retrieved = await retrieveContext(question, req.userId);
+    const [, retrieved] = await Promise.all([savePromise, retrievedPromise]);
     const augmented = buildAugmentedPrompt(question, retrieved);
 
-    const history = await loadHistoryMessages(chat.id);
-    // Strip the just-saved user message so we can replace its text with the
-    // augmented version while keeping prior turns intact.
-    history.pop();
     history.push(buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
 
     const fullText = await streamFromModel(res, history);
