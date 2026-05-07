@@ -1,6 +1,6 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { MessageSquarePlus, FileText, MessageCircle, Loader2 } from 'lucide-react';
+import { MessageSquarePlus, FileText, MessageCircle, BrainCircuit } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -37,6 +37,10 @@ const ChatList = () => {
         <NavLink to="/dashboard/documents" className={navLinkClasses}>
           <FileText className="size-4" />
           Documents
+        </NavLink>
+        <NavLink to="/dashboard/training" className={navLinkClasses}>
+          <BrainCircuit className="size-4" />
+          Training
         </NavLink>
       </div>
 

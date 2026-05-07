@@ -21,6 +21,9 @@ const ChatPage = lazy(() => import('./Routes/ChatPage/ChatPage'));
 const DocumentsPage = lazy(() =>
   import('./Routes/DocumentsPage/DocumentsPage')
 );
+const TrainingPage = lazy(() =>
+  import('./Routes/TrainingPage/TrainingPage')
+);
 
 const RouteFallback = () => (
   <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -50,6 +53,7 @@ const router = createBrowserRouter([
           { path: '/dashboard', element: withSuspense(<DashboardPage />) },
           { path: '/dashboard/chats/:id', element: withSuspense(<ChatPage />) },
           { path: '/dashboard/documents', element: withSuspense(<DocumentsPage />) },
+          { path: '/dashboard/training', element: withSuspense(<TrainingPage />) },
         ],
       },
     ],
