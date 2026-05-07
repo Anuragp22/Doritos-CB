@@ -9,6 +9,7 @@ import ChatPage from './Routes/ChatPage/ChatPage';
 import SignInPage from './Routes/SignInPage/SignInPage';
 import SignUpPage from './Routes/SignUpPage/SignUpPage';
 import DashboardLayout from './layouts/dashboardLayout/dashboardLayout';
+import DocumentsPage from './Routes/DocumentsPage/DocumentsPage';
 
 const router = createBrowserRouter([
   {
@@ -27,6 +28,10 @@ const router = createBrowserRouter([
           {
             path: '/dashboard/chats/:id',
             element: <ChatPage />,
+          },
+          {
+            path: '/dashboard/documents',
+            element: <DocumentsPage />,
           },
         ],
       },
