@@ -6,13 +6,6 @@ import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
 import './chatPage.css';
 
-const formatDateline = (date) => {
-  const d = new Date(date);
-  const day = String(d.getDate()).padStart(2, '0');
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${day}.${months[d.getMonth()]}.${String(d.getFullYear()).slice(2)} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-
 const ChatPage = () => {
   const path = useLocation().pathname;
   const chatId = path.split('/').pop();
@@ -26,19 +19,8 @@ const ChatPage = () => {
       }).then((res) => res.json()),
   });
 
-  let dispatchCounter = 0;
-  let queryCounter = 0;
-  if (data?.messages) {
-    for (const m of data.messages) {
-      if (m.role === 'user') queryCounter += 1;
-      else dispatchCounter += 1;
-    }
-  }
-
   const { streamingTurn, composer, isStreaming } = useNewPrompt({
     data: data ?? null,
-    dispatchOffset: dispatchCounter,
-    queryOffset: queryCounter,
   });
 
   useEffect(() => {
@@ -60,54 +42,28 @@ const ChatPage = () => {
           ) : (
             <>
               {data?.messages?.map((message) => {
-                const isUser = message.role === 'user';
-                const ts = formatDateline(message.createdAt || data.createdAt || Date.now());
-
-                if (isUser) {
-                  let n = 0;
-                  for (const m of data.messages) {
-                    if (m.role === 'user') {
-                      n += 1;
-                      if (m.id === message.id) break;
-                    }
-                  }
+                if (message.role === 'user') {
                   return (
-                    <article key={message.id} className="dispatch-entry">
-                      <div className="dispatch-entry__rule">
-                        <span className="marker">Query № {String(n).padStart(3, '0')}</span>
-                        <span className="line" />
-                        <span className="stamp">{ts}</span>
+                    <div key={message.id} className="dispatch-turn--user">
+                      <div className="dispatch-query">
+                        {message.imageUrl && (
+                          <img
+                            src={message.imageUrl}
+                            alt="Attachment"
+                            className="dispatch-query__image"
+                            loading="lazy"
+                          />
+                        )}
+                        {message.text}
                       </div>
-                      {message.imageUrl && (
-                        <img
-                          src={message.imageUrl}
-                          alt="Attachment"
-                          className="dispatch-query__image"
-                          loading="lazy"
-                        />
-                      )}
-                      <div className="dispatch-query">{message.text}</div>
-                    </article>
+                    </div>
                   );
                 }
-
-                let n = 0;
-                for (const m of data.messages) {
-                  if (m.role !== 'user') {
-                    n += 1;
-                    if (m.id === message.id) break;
-                  }
-                }
                 return (
-                  <article key={message.id} className="dispatch-entry">
-                    <div className="dispatch-entry__rule">
-                      <span className="marker">Dispatch № {String(n).padStart(3, '0')}</span>
-                      <span className="line" />
-                      <span className="stamp">{ts}</span>
-                    </div>
+                  <div key={message.id} className="dispatch-turn--assistant">
                     <MarkdownMessage className="dispatch-body">{message.text}</MarkdownMessage>
                     <Citations sources={message.sources} variant="footnote" />
-                  </article>
+                  </div>
                 );
               })}
               {streamingTurn}

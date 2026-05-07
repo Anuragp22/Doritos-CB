@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Code2, Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { ArrowUp, Code2, Image as ImageIcon, MessageSquare, Square } from 'lucide-react';
 import { readSSEStream } from '@/lib/stream';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
@@ -14,13 +14,6 @@ const SUGGESTIONS = [
   { icon: ImageIcon, label: 'Analyze an image' },
   { icon: Code2, label: 'Help with my code' },
 ];
-
-const today = () => {
-  const d = new Date();
-  const day = String(d.getDate()).padStart(2, '0');
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${day}.${months[d.getMonth()]}.${String(d.getFullYear()).slice(2)} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
 
 const DashboardPage = () => {
   const queryClient = useQueryClient();
@@ -75,7 +68,8 @@ const DashboardPage = () => {
     }
   };
 
-  const ts = today();
+  const cancel = () => controllerRef.current?.abort();
+
   const isThread = isStreaming || streamingAnswer || submittedText;
 
   return (
@@ -84,36 +78,24 @@ const DashboardPage = () => {
         <div className="dispatch-page">
           {isThread ? (
             <>
-              <article className="dispatch-entry">
-                <div className="dispatch-entry__rule">
-                  <span className="marker">Query № 001</span>
-                  <span className="line" />
-                  <span className="stamp">{ts}</span>
-                </div>
+              <div className="dispatch-turn--user">
                 <div className="dispatch-query">{submittedText}</div>
-              </article>
-              <article className="dispatch-entry">
-                <div className="dispatch-entry__rule">
-                  <span className="marker">Dispatch № 001</span>
-                  <span className="line" />
-                  <span className="stamp">{ts}</span>
-                </div>
+              </div>
+              <div className="dispatch-turn--assistant">
                 {streamingAnswer ? (
                   <>
                     <MarkdownMessage className="dispatch-body">{streamingAnswer}</MarkdownMessage>
                     <Citations sources={streamingSources} variant="footnote" />
                   </>
                 ) : (
-                  <div className="dispatch-thinking">Awaiting transmission</div>
+                  <div className="dispatch-thinking">Thinking</div>
                 )}
-              </article>
+              </div>
               {error && <div className="dispatch-error">{error}</div>}
             </>
           ) : (
             <div className="dispatch-landing-hero">
-              <h1 className="dispatch-landing-hero__title">
-                What can I help with?
-              </h1>
+              <h1 className="dispatch-landing-hero__title">What can I help with?</h1>
               <ul className="dispatch-fields__list">
                 {SUGGESTIONS.map(({ icon: Icon, label }) => (
                   <li key={label} className="dispatch-field">
@@ -129,19 +111,29 @@ const DashboardPage = () => {
 
       <div className="dispatch-composer-bar">
         <form onSubmit={handleSubmit} className="dispatch-composer">
-          <span className="dispatch-composer__prompt" aria-hidden>{'>>'}</span>
           <input
             type="text"
             name="text"
             placeholder="Ask anything…"
             disabled={isStreaming}
             autoComplete="off"
-            spellCheck="false"
           />
-          <button type="submit" className="dispatch-composer__btn" disabled={isStreaming}>
-            Send
-            <span aria-hidden>&rarr;</span>
-          </button>
+          <div className="dispatch-composer__actions">
+            {isStreaming ? (
+              <button
+                type="button"
+                onClick={cancel}
+                aria-label="Stop"
+                className="dispatch-composer__btn dispatch-composer__btn--cancel"
+              >
+                <Square className="size-3.5" fill="currentColor" />
+              </button>
+            ) : (
+              <button type="submit" aria-label="Send" className="dispatch-composer__btn">
+                <ArrowUp className="size-4" />
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>

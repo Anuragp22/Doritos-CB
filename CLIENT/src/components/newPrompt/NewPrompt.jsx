@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { ArrowUp, Square } from 'lucide-react';
 import Upload from '@/components/upload/upload';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
@@ -8,16 +8,7 @@ import { readSSEStream } from '@/lib/stream';
 
 const API = import.meta.env.VITE_API_URL;
 
-const stamp = () => {
-  const d = new Date();
-  const day = String(d.getDate()).padStart(2, '0');
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${day}.${months[d.getMonth()]}.${String(d.getFullYear()).slice(2)} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-
-const pad = (n) => String(n).padStart(3, '0');
-
-export function useNewPrompt({ data, dispatchOffset = 0, queryOffset = 0 }) {
+export function useNewPrompt({ data }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [sources, setSources] = useState(null);
@@ -81,46 +72,34 @@ export function useNewPrompt({ data, dispatchOffset = 0, queryOffset = 0 }) {
 
   const cancel = () => controllerRef.current?.abort();
 
-  const ts = stamp();
-  const liveQueryNum = queryOffset + 1;
-  const liveDispatchNum = dispatchOffset + 1;
-
   const streamingTurn = (
     <>
-      {img.isLoading && <div className="dispatch-thinking">Receiving image…</div>}
+      {img.isLoading && <div className="dispatch-thinking">Uploading image</div>}
       {img.dbData?.filePath && (
-        <img
-          src={img.dbData.filePath}
-          alt="Uploaded preview"
-          className="dispatch-pending-image"
-        />
+        <div className="dispatch-turn--user">
+          <img
+            src={img.dbData.filePath}
+            alt="Uploaded preview"
+            className="dispatch-pending-image"
+          />
+        </div>
       )}
       {question && (
-        <article className="dispatch-entry">
-          <div className="dispatch-entry__rule">
-            <span className="marker">Query № {pad(liveQueryNum)}</span>
-            <span className="line" />
-            <span className="stamp">{ts}</span>
-          </div>
+        <div className="dispatch-turn--user">
           <div className="dispatch-query">{question}</div>
-        </article>
+        </div>
       )}
       {(answer || isStreaming) && (
-        <article className="dispatch-entry">
-          <div className="dispatch-entry__rule">
-            <span className="marker">Dispatch № {pad(liveDispatchNum)}</span>
-            <span className="line" />
-            <span className="stamp">{ts}</span>
-          </div>
+        <div className="dispatch-turn--assistant">
           {answer ? (
             <>
               <MarkdownMessage className="dispatch-body">{answer}</MarkdownMessage>
               <Citations sources={sources} variant="footnote" />
             </>
           ) : (
-            <div className="dispatch-thinking">Awaiting transmission</div>
+            <div className="dispatch-thinking">Thinking</div>
           )}
-        </article>
+        </div>
       )}
       {error && <div className="dispatch-error">{error}</div>}
     </>
@@ -128,16 +107,14 @@ export function useNewPrompt({ data, dispatchOffset = 0, queryOffset = 0 }) {
 
   const composer = (
     <form ref={formRef} onSubmit={handleSubmit} className="dispatch-composer">
-      <span className="dispatch-composer__prompt" aria-hidden>{'>>'}</span>
       <input
         type="text"
         name="text"
-        placeholder="Ask anything…"
+        placeholder="Reply to Doritos…"
         disabled={isStreaming}
         autoComplete="off"
-        spellCheck="false"
       />
-      <div className="flex items-center gap-2">
+      <div className="dispatch-composer__actions">
         <span className="dispatch-composer__upload">
           <Upload setImg={setImg} />
         </span>
@@ -145,15 +122,14 @@ export function useNewPrompt({ data, dispatchOffset = 0, queryOffset = 0 }) {
           <button
             type="button"
             onClick={cancel}
+            aria-label="Stop"
             className="dispatch-composer__btn dispatch-composer__btn--cancel"
           >
-            <X className="size-3.5" />
-            Stop
+            <Square className="size-3.5" fill="currentColor" />
           </button>
         ) : (
-          <button type="submit" className="dispatch-composer__btn">
-            Send
-            <span aria-hidden>&rarr;</span>
+          <button type="submit" aria-label="Send" className="dispatch-composer__btn">
+            <ArrowUp className="size-4" />
           </button>
         )}
       </div>

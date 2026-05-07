@@ -22,7 +22,7 @@
   --border: #d0c9be;
   --input: #d0c9be;
   --ring: #c25e2c;
-  --radius: 0;
+  --radius: 0.75rem;
   --ink: #1a2238;
   --paper: #f4ede1;
 }
@@ -52,10 +52,10 @@
   --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --font-serif: 'Fraunces', Georgia, serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --radius-sm: var(--radius);
-  --radius-md: var(--radius);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 @layer base {
