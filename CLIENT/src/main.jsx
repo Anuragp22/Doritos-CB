@@ -1,41 +1,49 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
-import HomePage from './Routes/HomePage/HomePage';
+import { Loader2 } from 'lucide-react';
 import './index.css';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import DashboardPage from './Routes/DashboardPage/DashboardPage';
 import RootLayout from './layouts/rootLayout/rootLayout';
-import ChatPage from './Routes/ChatPage/ChatPage';
-import SignInPage from './Routes/SignInPage/SignInPage';
-import SignUpPage from './Routes/SignUpPage/SignUpPage';
-import DashboardLayout from './layouts/dashboardLayout/dashboardLayout';
-import DocumentsPage from './Routes/DocumentsPage/DocumentsPage';
+
+const HomePage = lazy(() => import('./Routes/HomePage/HomePage'));
+const SignInPage = lazy(() => import('./Routes/SignInPage/SignInPage'));
+const SignUpPage = lazy(() => import('./Routes/SignUpPage/SignUpPage'));
+const DashboardLayout = lazy(() =>
+  import('./layouts/dashboardLayout/dashboardLayout')
+);
+const DashboardPage = lazy(() =>
+  import('./Routes/DashboardPage/DashboardPage')
+);
+const ChatPage = lazy(() => import('./Routes/ChatPage/ChatPage'));
+const DocumentsPage = lazy(() =>
+  import('./Routes/DocumentsPage/DocumentsPage')
+);
+
+const RouteFallback = () => (
+  <div className="flex h-full items-center justify-center text-muted-foreground">
+    <Loader2 className="size-5 animate-spin" />
+  </div>
+);
+
+const withSuspense = (element) => (
+  <Suspense fallback={<RouteFallback />}>{element}</Suspense>
+);
 
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
     children: [
-      { path: '/', element: <HomePage /> },
-      { path: '/sign-in/*', element: <SignInPage /> },
-      { path: '/sign-up', element: <SignUpPage /> },
+      { path: '/', element: withSuspense(<HomePage />) },
+      { path: '/sign-in/*', element: withSuspense(<SignInPage />) },
+      { path: '/sign-up', element: withSuspense(<SignUpPage />) },
       {
-        element: <DashboardLayout />,
+        element: withSuspense(<DashboardLayout />),
         children: [
-          {
-            path: '/dashboard',
-            element: <DashboardPage />,
-          },
-          {
-            path: '/dashboard/chats/:id',
-            element: <ChatPage />,
-          },
-          {
-            path: '/dashboard/documents',
-            element: <DocumentsPage />,
-          },
+          { path: '/dashboard', element: withSuspense(<DashboardPage />) },
+          { path: '/dashboard/chats/:id', element: withSuspense(<ChatPage />) },
+          { path: '/dashboard/documents', element: withSuspense(<DocumentsPage />) },
         ],
       },
-      // { path: '/chat', element: <Chatpage /> },
     ],
   },
 ]);
