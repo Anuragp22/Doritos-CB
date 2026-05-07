@@ -134,13 +134,13 @@ const NewPrompt = ({ data }) => {
         </div>
       )}
 
-      <div ref={endRef} className="pb-32" />
+      <div ref={endRef} />
 
       <form
         ref={formRef}
         onSubmit={handleSubmit}
         className={cn(
-          'fixed bottom-6 left-[calc(280px+1rem)] right-6 mx-auto flex max-w-3xl items-center gap-2 rounded-2xl border bg-card/80 px-3 py-2 shadow-lg backdrop-blur'
+          'sticky bottom-4 mt-4 flex w-full items-center gap-2 rounded-2xl border bg-card/80 px-3 py-2 shadow-lg backdrop-blur'
         )}
       >
         <Upload setImg={setImg} />
