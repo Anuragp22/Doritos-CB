@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUp, Code2, Image as ImageIcon, MessageSquare, Loader2 } from 'lucide-react';
+import { Code2, Image as ImageIcon, MessageSquare } from 'lucide-react';
 import { readSSEStream } from '@/lib/stream';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
+import '@/Routes/ChatPage/chatPage.css';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -15,6 +14,13 @@ const SUGGESTIONS = [
   { icon: ImageIcon, label: 'Analyze an image' },
   { icon: Code2, label: 'Help with my code' },
 ];
+
+const today = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  return `${day}.${months[d.getMonth()]}.${String(d.getFullYear()).slice(2)} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 
 const DashboardPage = () => {
   const queryClient = useQueryClient();
@@ -69,71 +75,75 @@ const DashboardPage = () => {
     }
   };
 
+  const stamp = today();
+
   if (isStreaming || streamingAnswer) {
     return (
-      <div className="flex h-full flex-col items-center px-6 py-8">
-        <div className="flex w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto">
-          <div className="self-end max-w-[80%] rounded-2xl bg-accent px-4 py-3 text-sm">
-            {submittedText}
-          </div>
-          {streamingAnswer ? (
-            <div className="flex max-w-[90%] flex-col gap-1 self-start">
-              <Card className="gap-0 px-5 py-4">
-                <MarkdownMessage>{streamingAnswer}</MarkdownMessage>
-              </Card>
-              <Citations sources={streamingSources} />
+      <div className="dispatch-shell h-full overflow-y-auto">
+        <header className="dispatch-mast">
+          <h1 className="dispatch-mast__title">The Doritos <em>Dispatch</em></h1>
+        </header>
+        <main className="dispatch-page">
+          <article className="dispatch-entry">
+            <div className="dispatch-entry__rule">
+              <span className="marker">Query № 001</span>
+              <span className="line" />
+              <span className="stamp">{stamp}</span>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Thinking…
+            <div className="dispatch-query">{submittedText}</div>
+          </article>
+          <article className="dispatch-entry">
+            <div className="dispatch-entry__rule">
+              <span className="marker">Dispatch № 001</span>
+              <span className="line" />
+              <span className="stamp">{stamp}</span>
             </div>
-          )}
-          {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-        </div>
+            {streamingAnswer ? (
+              <>
+                <MarkdownMessage className="dispatch-body">{streamingAnswer}</MarkdownMessage>
+                <Citations sources={streamingSources} variant="footnote" />
+              </>
+            ) : (
+              <div className="dispatch-thinking">Awaiting transmission</div>
+            )}
+          </article>
+          {error && <div className="dispatch-error">{error}</div>}
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col items-center px-6">
-      <div className="flex flex-1 flex-col items-center justify-center gap-10">
-        <div className="flex items-center gap-4 opacity-90">
-          <img src="/logo.png" alt="" className="size-14" />
-          <h1 className="gradient-text text-5xl font-bold tracking-tight md:text-6xl">
-            DORITOS AI
-          </h1>
-        </div>
-        <div className="grid w-full max-w-3xl grid-cols-1 gap-3 md:grid-cols-3">
+    <div className="dispatch-shell h-full overflow-y-auto">
+      <header className="dispatch-mast">
+        <h1 className="dispatch-mast__title">The Doritos <em>Dispatch</em></h1>
+      </header>
+
+      <main className="dispatch-page dispatch-landing">
+        <ul className="dispatch-fields__list">
           {SUGGESTIONS.map(({ icon: Icon, label }) => (
-            <Card
-              key={label}
-              className="cursor-pointer items-start gap-3 px-4 py-4 transition-colors hover:bg-accent/40"
-            >
-              <Icon className="size-7 text-muted-foreground" />
-              <span className="text-sm">{label}</span>
-            </Card>
+            <li key={label} className="dispatch-field">
+              <Icon className="dispatch-field__icon" aria-hidden />
+              <span className="dispatch-field__label">{label}</span>
+            </li>
           ))}
-        </div>
-      </div>
-      <form
-        onSubmit={handleSubmit}
-        className="mb-6 flex w-full max-w-3xl items-center gap-2 rounded-2xl border bg-card/60 px-4 py-2"
-      >
-        <input
-          type="text"
-          name="text"
-          placeholder="Ask anything…"
-          className="flex-1 bg-transparent px-2 py-3 text-sm outline-none placeholder:text-muted-foreground"
-        />
-        <Button type="submit" size="icon" className="rounded-full">
-          <ArrowUp className="size-4" />
-        </Button>
-      </form>
+        </ul>
+
+        <form onSubmit={handleSubmit} className="dispatch-composer">
+          <span className="dispatch-composer__prompt" aria-hidden>{'>>'}</span>
+          <input
+            type="text"
+            name="text"
+            placeholder="Ask anything…"
+            autoComplete="off"
+            spellCheck="false"
+          />
+          <button type="submit" className="dispatch-composer__btn">
+            Transmit
+            <span aria-hidden>&rarr;</span>
+          </button>
+        </form>
+      </main>
     </div>
   );
 };

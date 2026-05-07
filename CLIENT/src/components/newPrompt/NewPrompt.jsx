@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, Bot, Loader2, User as UserIcon, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import Upload from '@/components/upload/upload';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { readSSEStream } from '@/lib/stream';
-import { cn } from '@/lib/utils';
 
 const API = import.meta.env.VITE_API_URL;
 
-const NewPrompt = ({ data }) => {
+const stamp = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  return `${day}.${months[d.getMonth()]}.${String(d.getFullYear()).slice(2)} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+const pad = (n) => String(n).padStart(3, '0');
+
+const NewPrompt = ({ data, dispatchOffset = 0, queryOffset = 0 }) => {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [sources, setSources] = useState(null);
@@ -85,95 +91,90 @@ const NewPrompt = ({ data }) => {
 
   const cancel = () => controllerRef.current?.abort();
 
+  const ts = stamp();
+  const liveQueryNum = queryOffset + 1;
+  const liveDispatchNum = dispatchOffset + 1;
+
   return (
     <>
       {img.isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Uploading…
-        </div>
+        <div className="dispatch-thinking">Receiving image…</div>
       )}
       {img.dbData?.filePath && (
-        <div className="self-end">
-          <img
-            src={img.dbData.filePath}
-            alt="Uploaded preview"
-            className="max-h-60 max-w-sm rounded-lg border object-cover"
-          />
-        </div>
+        <img
+          src={img.dbData.filePath}
+          alt="Uploaded preview"
+          className="dispatch-pending-image"
+        />
       )}
+
       {question && (
-        <div className="flex flex-row-reverse gap-3">
-          <Avatar className="size-8 shrink-0 border bg-primary/10">
-            <AvatarFallback className="bg-transparent">
-              <UserIcon className="size-4" />
-            </AvatarFallback>
-          </Avatar>
-          <div className="rounded-2xl bg-accent px-4 py-3 text-sm max-w-[80%]">
-            <p className="whitespace-pre-wrap leading-relaxed">{question}</p>
+        <article className="dispatch-entry">
+          <div className="dispatch-entry__rule">
+            <span className="marker">Query № {pad(liveQueryNum)}</span>
+            <span className="line" />
+            <span className="stamp">{ts}</span>
           </div>
-        </div>
+          <div className="dispatch-query">{question}</div>
+        </article>
       )}
+
       {(answer || isStreaming) && (
-        <div className="flex gap-3">
-          <Avatar className="size-8 shrink-0 border bg-accent">
-            <AvatarFallback className="bg-transparent">
-              <Bot className="size-4 text-primary" />
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex flex-1 flex-col gap-1">
-            <div className="rounded-2xl border bg-card px-4 py-3 text-sm">
-              {answer ? (
-                <MarkdownMessage>{answer}</MarkdownMessage>
-              ) : (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  Thinking…
-                </div>
-              )}
-            </div>
-            <Citations sources={sources} />
+        <article className="dispatch-entry">
+          <div className="dispatch-entry__rule">
+            <span className="marker">Dispatch № {pad(liveDispatchNum)}</span>
+            <span className="line" />
+            <span className="stamp">{ts}</span>
           </div>
-        </div>
+          {answer ? (
+            <>
+              <MarkdownMessage className="dispatch-body">{answer}</MarkdownMessage>
+              <Citations sources={sources} variant="footnote" />
+            </>
+          ) : (
+            <div className="dispatch-thinking">Awaiting transmission</div>
+          )}
+        </article>
       )}
-      {error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+
+      {error && <div className="dispatch-error">{error}</div>}
 
       <div ref={endRef} />
 
       <form
         ref={formRef}
         onSubmit={handleSubmit}
-        className={cn(
-          'sticky bottom-4 mt-4 flex w-full items-center gap-2 rounded-2xl border bg-card/80 px-3 py-2 shadow-lg backdrop-blur'
-        )}
+        className="dispatch-composer"
       >
-        <Upload setImg={setImg} />
+        <span className="dispatch-composer__prompt" aria-hidden>{'>>'}</span>
         <input
           type="text"
           name="text"
-          placeholder="Ask anything…"
+          placeholder="type your query, then transmit…"
           disabled={isStreaming}
-          className="flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+          autoComplete="off"
+          spellCheck="false"
         />
-        {isStreaming ? (
-          <Button
-            type="button"
-            onClick={cancel}
-            size="icon"
-            variant="destructive"
-            className="rounded-full"
-          >
-            <X className="size-4" />
-          </Button>
-        ) : (
-          <Button type="submit" size="icon" className="rounded-full">
-            <ArrowUp className="size-4" />
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="dispatch-composer__upload">
+            <Upload setImg={setImg} />
+          </span>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={cancel}
+              className="dispatch-composer__btn dispatch-composer__btn--cancel"
+            >
+              <X className="size-3.5" />
+              Halt
+            </button>
+          ) : (
+            <button type="submit" className="dispatch-composer__btn">
+              Transmit
+              <span aria-hidden>&rarr;</span>
+            </button>
+          )}
+        </div>
       </form>
     </>
   );

@@ -11,33 +11,37 @@ function detectLanguage(className) {
   return m ? m[1] : null;
 }
 
-const components = {
-  code({ className, children, ...props }) {
-    const inline = !className;
-    const language = detectLanguage(className);
-    const value = String(children).replace(/\n$/, '');
-    if (inline) {
-      return (
-        <code
-          className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.875em] text-foreground"
-          {...props}
-        >
-          {children}
-        </code>
-      );
+const codeRenderer = (variant) => function CodeRenderer({ className, children, ...props }) {
+  const inline = !className;
+  const language = detectLanguage(className);
+  const value = String(children).replace(/\n$/, '');
+  if (inline) {
+    if (variant === 'dispatch') {
+      return <code {...props}>{children}</code>;
     }
     return (
-      <Suspense
-        fallback={
-          <pre className="my-3 overflow-x-auto rounded-lg border bg-[#0d1117] p-3 text-sm">
-            <code>{value}</code>
-          </pre>
-        }
+      <code
+        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.875em] text-foreground"
+        {...props}
       >
-        <CodeBlock language={language} value={value} />
-      </Suspense>
+        {children}
+      </code>
     );
-  },
+  }
+  return (
+    <Suspense
+      fallback={
+        <pre className="my-3 overflow-x-auto rounded-lg border bg-[#0d1117] p-3 text-sm">
+          <code>{value}</code>
+        </pre>
+      }
+    >
+      <CodeBlock language={language} value={value} />
+    </Suspense>
+  );
+};
+
+const styledComponents = {
   p: ({ children }) => <p className="my-2 leading-7">{children}</p>,
   ul: ({ children }) => <ul className="my-2 ml-6 list-disc space-y-1">{children}</ul>,
   ol: ({ children }) => <ol className="my-2 ml-6 list-decimal space-y-1">{children}</ol>,
@@ -76,7 +80,19 @@ const components = {
   hr: () => <hr className="my-4 border-border" />,
 };
 
+const dispatchComponents = {
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  ),
+};
+
 const MarkdownMessage = memo(function MarkdownMessage({ children, className }) {
+  const variant = className?.includes('dispatch-body') ? 'dispatch' : 'default';
+  const base = variant === 'dispatch' ? dispatchComponents : styledComponents;
+  const components = { ...base, code: codeRenderer(variant) };
+
   return (
     <div className={cn('break-words', className)}>
       <Markdown remarkPlugins={[remarkGfm]} components={components}>
