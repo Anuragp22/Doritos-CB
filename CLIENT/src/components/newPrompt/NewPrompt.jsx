@@ -17,27 +17,17 @@ const stamp = () => {
 
 const pad = (n) => String(n).padStart(3, '0');
 
-const NewPrompt = ({ data, dispatchOffset = 0, queryOffset = 0 }) => {
+export function useNewPrompt({ data, dispatchOffset = 0, queryOffset = 0 }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [sources, setSources] = useState(null);
   const [error, setError] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [img, setImg] = useState({
-    isLoading: false,
-    error: '',
-    dbData: {},
-    aiData: {},
-  });
+  const [img, setImg] = useState({ isLoading: false, error: '', dbData: {}, aiData: {} });
 
-  const endRef = useRef(null);
   const formRef = useRef(null);
   const controllerRef = useRef(null);
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [data, question, answer, img.dbData]);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
@@ -95,11 +85,9 @@ const NewPrompt = ({ data, dispatchOffset = 0, queryOffset = 0 }) => {
   const liveQueryNum = queryOffset + 1;
   const liveDispatchNum = dispatchOffset + 1;
 
-  return (
+  const streamingTurn = (
     <>
-      {img.isLoading && (
-        <div className="dispatch-thinking">Receiving image…</div>
-      )}
+      {img.isLoading && <div className="dispatch-thinking">Receiving image…</div>}
       {img.dbData?.filePath && (
         <img
           src={img.dbData.filePath}
@@ -107,7 +95,6 @@ const NewPrompt = ({ data, dispatchOffset = 0, queryOffset = 0 }) => {
           className="dispatch-pending-image"
         />
       )}
-
       {question && (
         <article className="dispatch-entry">
           <div className="dispatch-entry__rule">
@@ -118,7 +105,6 @@ const NewPrompt = ({ data, dispatchOffset = 0, queryOffset = 0 }) => {
           <div className="dispatch-query">{question}</div>
         </article>
       )}
-
       {(answer || isStreaming) && (
         <article className="dispatch-entry">
           <div className="dispatch-entry__rule">
@@ -136,48 +122,43 @@ const NewPrompt = ({ data, dispatchOffset = 0, queryOffset = 0 }) => {
           )}
         </article>
       )}
-
       {error && <div className="dispatch-error">{error}</div>}
-
-      <div ref={endRef} />
-
-      <form
-        ref={formRef}
-        onSubmit={handleSubmit}
-        className="dispatch-composer"
-      >
-        <span className="dispatch-composer__prompt" aria-hidden>{'>>'}</span>
-        <input
-          type="text"
-          name="text"
-          placeholder="type your query, then transmit…"
-          disabled={isStreaming}
-          autoComplete="off"
-          spellCheck="false"
-        />
-        <div className="flex items-center gap-2">
-          <span className="dispatch-composer__upload">
-            <Upload setImg={setImg} />
-          </span>
-          {isStreaming ? (
-            <button
-              type="button"
-              onClick={cancel}
-              className="dispatch-composer__btn dispatch-composer__btn--cancel"
-            >
-              <X className="size-3.5" />
-              Halt
-            </button>
-          ) : (
-            <button type="submit" className="dispatch-composer__btn">
-              Transmit
-              <span aria-hidden>&rarr;</span>
-            </button>
-          )}
-        </div>
-      </form>
     </>
   );
-};
 
-export default NewPrompt;
+  const composer = (
+    <form ref={formRef} onSubmit={handleSubmit} className="dispatch-composer">
+      <span className="dispatch-composer__prompt" aria-hidden>{'>>'}</span>
+      <input
+        type="text"
+        name="text"
+        placeholder="Ask anything…"
+        disabled={isStreaming}
+        autoComplete="off"
+        spellCheck="false"
+      />
+      <div className="flex items-center gap-2">
+        <span className="dispatch-composer__upload">
+          <Upload setImg={setImg} />
+        </span>
+        {isStreaming ? (
+          <button
+            type="button"
+            onClick={cancel}
+            className="dispatch-composer__btn dispatch-composer__btn--cancel"
+          >
+            <X className="size-3.5" />
+            Stop
+          </button>
+        ) : (
+          <button type="submit" className="dispatch-composer__btn">
+            Send
+            <span aria-hidden>&rarr;</span>
+          </button>
+        )}
+      </div>
+    </form>
+  );
+
+  return { streamingTurn, composer, isStreaming };
+}

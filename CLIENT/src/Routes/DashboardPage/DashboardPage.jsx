@@ -75,75 +75,75 @@ const DashboardPage = () => {
     }
   };
 
-  const stamp = today();
-
-  if (isStreaming || streamingAnswer) {
-    return (
-      <div className="dispatch-shell h-full overflow-y-auto">
-        <header className="dispatch-mast">
-          <h1 className="dispatch-mast__title">The Doritos <em>Dispatch</em></h1>
-        </header>
-        <main className="dispatch-page">
-          <article className="dispatch-entry">
-            <div className="dispatch-entry__rule">
-              <span className="marker">Query № 001</span>
-              <span className="line" />
-              <span className="stamp">{stamp}</span>
-            </div>
-            <div className="dispatch-query">{submittedText}</div>
-          </article>
-          <article className="dispatch-entry">
-            <div className="dispatch-entry__rule">
-              <span className="marker">Dispatch № 001</span>
-              <span className="line" />
-              <span className="stamp">{stamp}</span>
-            </div>
-            {streamingAnswer ? (
-              <>
-                <MarkdownMessage className="dispatch-body">{streamingAnswer}</MarkdownMessage>
-                <Citations sources={streamingSources} variant="footnote" />
-              </>
-            ) : (
-              <div className="dispatch-thinking">Awaiting transmission</div>
-            )}
-          </article>
-          {error && <div className="dispatch-error">{error}</div>}
-        </main>
-      </div>
-    );
-  }
+  const ts = today();
+  const isThread = isStreaming || streamingAnswer || submittedText;
 
   return (
-    <div className="dispatch-shell h-full overflow-y-auto">
-      <header className="dispatch-mast">
-        <h1 className="dispatch-mast__title">The Doritos <em>Dispatch</em></h1>
-      </header>
+    <div className="dispatch-shell flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto">
+        <div className="dispatch-page">
+          {isThread ? (
+            <>
+              <article className="dispatch-entry">
+                <div className="dispatch-entry__rule">
+                  <span className="marker">Query № 001</span>
+                  <span className="line" />
+                  <span className="stamp">{ts}</span>
+                </div>
+                <div className="dispatch-query">{submittedText}</div>
+              </article>
+              <article className="dispatch-entry">
+                <div className="dispatch-entry__rule">
+                  <span className="marker">Dispatch № 001</span>
+                  <span className="line" />
+                  <span className="stamp">{ts}</span>
+                </div>
+                {streamingAnswer ? (
+                  <>
+                    <MarkdownMessage className="dispatch-body">{streamingAnswer}</MarkdownMessage>
+                    <Citations sources={streamingSources} variant="footnote" />
+                  </>
+                ) : (
+                  <div className="dispatch-thinking">Awaiting transmission</div>
+                )}
+              </article>
+              {error && <div className="dispatch-error">{error}</div>}
+            </>
+          ) : (
+            <div className="dispatch-landing-hero">
+              <h1 className="dispatch-landing-hero__title">
+                What can I help with?
+              </h1>
+              <ul className="dispatch-fields__list">
+                {SUGGESTIONS.map(({ icon: Icon, label }) => (
+                  <li key={label} className="dispatch-field">
+                    <Icon className="dispatch-field__icon" aria-hidden />
+                    <span className="dispatch-field__label">{label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
 
-      <main className="dispatch-page dispatch-landing">
-        <ul className="dispatch-fields__list">
-          {SUGGESTIONS.map(({ icon: Icon, label }) => (
-            <li key={label} className="dispatch-field">
-              <Icon className="dispatch-field__icon" aria-hidden />
-              <span className="dispatch-field__label">{label}</span>
-            </li>
-          ))}
-        </ul>
-
+      <div className="dispatch-composer-bar">
         <form onSubmit={handleSubmit} className="dispatch-composer">
           <span className="dispatch-composer__prompt" aria-hidden>{'>>'}</span>
           <input
             type="text"
             name="text"
             placeholder="Ask anything…"
+            disabled={isStreaming}
             autoComplete="off"
             spellCheck="false"
           />
-          <button type="submit" className="dispatch-composer__btn">
-            Transmit
+          <button type="submit" className="dispatch-composer__btn" disabled={isStreaming}>
+            Send
             <span aria-hidden>&rarr;</span>
           </button>
         </form>
-      </main>
+      </div>
     </div>
   );
 };
