@@ -1,0 +1,7 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+torch>=2.1
+transformers>=4.45
+accelerate>=0.34
+qwen-vl-utils[decord]>=0.0.8
+pillow>=10

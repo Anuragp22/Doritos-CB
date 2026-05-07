@@ -7,3 +7,7 @@ BACKEND/uploads/*
 !BACKEND/uploads/.gitkeep
 *.log
 .DS_Store
+.claude/
+.venv/
+__pycache__/
+*.pyc
