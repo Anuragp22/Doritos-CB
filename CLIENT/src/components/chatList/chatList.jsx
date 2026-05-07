@@ -1,8 +1,20 @@
-import { Link } from 'react-router-dom';
-import './chatList.css';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { MessageSquarePlus, FileText, MessageCircle, Loader2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+
+const navLinkClasses = ({ isActive }) =>
+  cn(
+    'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+    isActive
+      ? 'bg-accent text-accent-foreground'
+      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+  );
 
 const ChatList = () => {
+  const location = useLocation();
   const { isPending, error, data } = useQuery({
     queryKey: ['userChats'],
     queryFn: () =>
@@ -12,30 +24,62 @@ const ChatList = () => {
   });
 
   return (
-    <div className='chatList'>
-      <Link to='/dashboard'>Create a new Chat</Link>
-      <Link to='/dashboard/documents'>Documents</Link>
-      <hr />
-      <span className='title'>RECENT CHATS</span>
-      <div className='list'>
-        {isPending
-          ? 'Loading...'
-          : error
-          ? 'Something went wrong!'
-          : data?.map((chat) => (
-              <Link to={`/dashboard/chats/${chat.id}`} key={chat.id}>
-                {chat.title}
-              </Link>
-            ))}
+    <div className="flex h-full flex-col p-3">
+      <div className="flex flex-col gap-1">
+        <NavLink
+          to="/dashboard"
+          end
+          className={navLinkClasses}
+        >
+          <MessageSquarePlus className="size-4" />
+          Create new chat
+        </NavLink>
+        <NavLink to="/dashboard/documents" className={navLinkClasses}>
+          <FileText className="size-4" />
+          Documents
+        </NavLink>
       </div>
-      <hr />
-      {/* <div className='upgrade'>
-        <img src='/logo.png' alt='' />
-        <div className='texts'>
-          <span>Upgrade to Doritos AI Pro</span>
-          <span>Get unlimited access to all features</span>
-        </div>
-      </div> */}
+
+      <div className="my-3 h-px bg-border/60" />
+
+      <span className="px-3 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        Recent chats
+      </span>
+
+      <ScrollArea className="-mx-3 flex-1 px-3">
+        {isPending ? (
+          <div className="flex flex-col gap-2 px-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-7 w-full" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="px-3 text-xs text-destructive">Failed to load chats.</div>
+        ) : !data?.length ? (
+          <div className="px-3 text-xs text-muted-foreground">No chats yet.</div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {data.map((chat) => {
+              const active = location.pathname === `/dashboard/chats/${chat.id}`;
+              return (
+                <Link
+                  key={chat.id}
+                  to={`/dashboard/chats/${chat.id}`}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                    active
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                  )}
+                >
+                  <MessageCircle className="size-3.5 shrink-0 opacity-70" />
+                  <span className="truncate">{chat.title || 'Untitled chat'}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </ScrollArea>
     </div>
   );
 };

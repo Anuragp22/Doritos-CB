@@ -1,29 +1,33 @@
 import { Outlet, useNavigate } from 'react-router-dom';
-import './dashboardLayout.css';
 import { useEffect } from 'react';
-import ChatList from '../../components/chatList/chatList';
-import { useAuth } from '../../lib/auth';
+import { Loader2 } from 'lucide-react';
+import ChatList from '@/components/chatList/chatList';
+import { useAuth } from '@/lib/auth';
 
 const DashboardLayout = () => {
   const { user, isLoaded } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isLoaded && !user) {
-      navigate('/sign-in');
-    }
+    if (isLoaded && !user) navigate('/sign-in');
   }, [isLoaded, user, navigate]);
 
-  if (!isLoaded) return 'Loading...';
+  if (!isLoaded) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className='dashboardLayout'>
-      <div className='menu'>
+    <div className="grid h-full grid-cols-[280px_1fr]">
+      <aside className="border-r border-border/60 bg-card/40">
         <ChatList />
-      </div>
-      <div className='content'>
+      </aside>
+      <section className="overflow-hidden bg-background">
         <Outlet />
-      </div>
+      </section>
     </div>
   );
 };
