@@ -236,6 +236,32 @@ async function retrieveContext(query, userId) {
   }
 }
 
+function dbMessageToQwen(message) {
+  const content = [];
+  if (message.imageUrl) content.push({ type: 'image', image: message.imageUrl });
+  content.push({ type: 'text', text: message.text });
+  return {
+    role: message.role === 'model' ? 'assistant' : 'user',
+    content,
+  };
+}
+
+async function loadHistoryMessages(chatId) {
+  if (!chatId) return [];
+  const prior = await prisma.message.findMany({
+    where: { chatId },
+    orderBy: { createdAt: 'asc' },
+  });
+  return prior.map(dbMessageToQwen);
+}
+
+function buildUserTurn({ augmentedText, imageUrl }) {
+  const content = [];
+  if (imageUrl) content.push({ type: 'image', image: imageUrl });
+  content.push({ type: 'text', text: augmentedText });
+  return { role: 'user', content };
+}
+
 // ─── Chats ────────────────────────────────────────────────────────────
 
 app.post('/api/chats', requireAuth, async (req, res) => {
@@ -247,8 +273,7 @@ app.post('/api/chats', requireAuth, async (req, res) => {
     const augmented = buildAugmentedPrompt(text, retrieved);
 
     const qwenResponse = await axios.post(QWEN_API_URL, {
-      user_text: augmented,
-      image_url: null,
+      messages: [buildUserTurn({ augmentedText: augmented })],
     });
     const answer = qwenResponse.data.description;
 
@@ -315,10 +340,10 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
     const retrieved = await retrieveContext(question, req.userId);
     const augmented = buildAugmentedPrompt(question, retrieved);
 
-    const qwenResponse = await axios.post(QWEN_API_URL, {
-      user_text: augmented,
-      image_url: img || null,
-    });
+    const history = await loadHistoryMessages(chat.id);
+    history.push(buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
+
+    const qwenResponse = await axios.post(QWEN_API_URL, { messages: history });
     const answer = qwenResponse.data.description;
 
     await prisma.message.createMany({

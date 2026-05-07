@@ -90,9 +90,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Doritos AI Inference Server", lifespan=lifespan)
 
 
+class ChatContent(BaseModel):
+    type: str
+    text: Optional[str] = None
+    image: Optional[str] = None
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: List[ChatContent]
+
+
 class GenerateRequest(BaseModel):
     user_text: Optional[str] = None
     image_url: Optional[str] = None
+    messages: Optional[List[ChatMessage]] = None
     max_new_tokens: int = 512
 
 
@@ -140,20 +152,36 @@ def set_model(req: SetModelRequest) -> dict:
     return {"message": f"Model loaded: {req.model_id}"}
 
 
-@app.post("/generate", response_model=GenerateResponse)
-def generate(req: GenerateRequest) -> GenerateResponse:
-    if not req.user_text and not req.image_url:
-        raise HTTPException(400, "Provide at least one of user_text or image_url.")
-    if _state["model"] is None or _state["processor"] is None:
-        raise HTTPException(503, "VLM not loaded.")
+def _build_messages(req: GenerateRequest) -> List[dict]:
+    """Build the Qwen2-VL messages list from either an explicit messages array
+    (multi-turn with prior history) or a single user_text/image_url pair."""
+    if req.messages:
+        return [m.model_dump(exclude_none=True) for m in req.messages]
 
     content: List[dict] = []
     if req.image_url:
         content.append({"type": "image", "image": req.image_url})
     if req.user_text:
         content.append({"type": "text", "text": req.user_text})
+    return [{"role": "user", "content": content}]
 
-    messages = [{"role": "user", "content": content}]
+
+def _has_image(messages: List[dict]) -> bool:
+    return any(
+        block.get("type") == "image"
+        for m in messages
+        for block in m.get("content", [])
+    )
+
+
+@app.post("/generate", response_model=GenerateResponse)
+def generate(req: GenerateRequest) -> GenerateResponse:
+    if not req.user_text and not req.image_url and not req.messages:
+        raise HTTPException(400, "Provide messages or user_text/image_url.")
+    if _state["model"] is None or _state["processor"] is None:
+        raise HTTPException(503, "VLM not loaded.")
+
+    messages = _build_messages(req)
     processor = _state["processor"]
     model = _state["model"]
 
@@ -162,7 +190,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
 
     inputs = processor(
         text=[text],
-        images=image_inputs if req.image_url else None,
+        images=image_inputs if _has_image(messages) else None,
         videos=video_inputs,
         padding=True,
         return_tensors="pt",
