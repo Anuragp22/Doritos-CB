@@ -24,3 +24,40 @@
     overflow: hidden;
   }
 }
+
+.authLinks {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.authLinks a {
+  color: #aaa;
+  text-decoration: none;
+}
+
+.authLinks a.primary {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #6a6aff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.authLinks .username {
+  color: #ccc;
+}
+
+.authLinks button {
+  padding: 6px 12px;
+  border: 1px solid #2a2a3a;
+  border-radius: 6px;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.authLinks button:hover {
+  background: rgba(255, 255, 255, 0.05);
+}

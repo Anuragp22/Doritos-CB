@@ -4,3 +4,78 @@
   align-items: center;
   height: 100vh;
 }
+
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 360px;
+  padding: 32px;
+  border: 1px solid #2a2a3a;
+  border-radius: 12px;
+  background: rgba(20, 20, 30, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.authForm h1 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+}
+
+.authForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.authForm input {
+  padding: 10px 12px;
+  border: 1px solid #2a2a3a;
+  border-radius: 8px;
+  background: #0f0f15;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+
+.authForm input:focus {
+  border-color: #6a6aff;
+}
+
+.authForm button {
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #6a6aff;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.authForm button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.authError {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 70, 70, 0.15);
+  color: #ff8a8a;
+  font-size: 13px;
+}
+
+.authSwitch {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: #888;
+}
+
+.authSwitch a {
+  color: #9a9aff;
+  text-decoration: none;
+}

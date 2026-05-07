@@ -1,25 +1,34 @@
 import { Link, Outlet } from 'react-router-dom';
 import './rootLayout.css';
-import { ClerkProvider } from '@clerk/clerk-react';
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  UserButton,
-} from '@clerk/clerk-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-if (!PUBLISHABLE_KEY) {
-  throw new Error('Missing Publishable Key');
-}
+import { AuthProvider, useAuth } from '../../lib/auth';
 
 const queryClient = new QueryClient();
 
+const HeaderUser = () => {
+  const { user, isLoaded, logout } = useAuth();
+  if (!isLoaded) return null;
+
+  if (!user) {
+    return (
+      <div className='authLinks'>
+        <Link to='/sign-in'>Sign in</Link>
+        <Link to='/sign-up' className='primary'>Sign up</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className='authLinks'>
+      <span className='username'>{user.username}</span>
+      <button type='button' onClick={logout}>Logout</button>
+    </div>
+  );
+};
+
 const RootLayout = () => {
   return (
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl='/'>
+    <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <div className='rootLayout'>
           <header className='header'>
@@ -28,12 +37,7 @@ const RootLayout = () => {
               <span>DORITOS AI</span>
             </Link>
             <div className='user'>
-              <SignedOut>
-                <SignInButton />
-              </SignedOut>
-              <SignedIn>
-                <UserButton />
-              </SignedIn>
+              <HeaderUser />
             </div>
           </header>
           <main className='main'>
@@ -41,7 +45,7 @@ const RootLayout = () => {
           </main>
         </div>
       </QueryClientProvider>
-    </ClerkProvider>
+    </AuthProvider>
   );
 };
 
