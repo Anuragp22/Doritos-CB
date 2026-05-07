@@ -61,17 +61,13 @@ const DocumentsPage = () => {
     <div className='documentsPage'>
       <h1>Documents</h1>
       <p className='hint'>
-        Upload <code>.txt</code> or <code>.md</code> files. They get chunked,
-        embedded, and used to ground future chat answers via hybrid retrieval.
+        Upload PDFs, Word documents, HTML, or any plain-text or code file.
+        They get chunked, embedded, and used to ground future chat answers
+        via hybrid retrieval (vector + full-text + reranker).
       </p>
 
       <form onSubmit={handleSubmit} className='uploadForm'>
-        <input
-          type='file'
-          name='file'
-          accept='.txt,.md,.markdown,text/plain,text/markdown'
-          required
-        />
+        <input type='file' name='file' required />
         <button type='submit' disabled={upload.isPending}>
           {upload.isPending ? 'Uploading…' : 'Upload'}
         </button>

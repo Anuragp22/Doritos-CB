@@ -12,6 +12,7 @@ import prisma from './lib/prisma.js';
 import { requireAuth, signToken, cookieOptions } from './middleware/auth.js';
 import { chunkText } from './lib/chunk.js';
 import { embed } from './lib/embed.js';
+import { extractText } from './lib/extract.js';
 import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 
 const port = process.env.PORT || 3000;
@@ -142,23 +143,24 @@ app.post('/upload', requireAuth, upload.single('file'), (req, res) => {
 app.post('/api/documents', requireAuth, docUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const filename = req.file.originalname;
-  const isText = /\.(txt|md|markdown)$/i.test(filename) ||
-    ['text/plain', 'text/markdown'].includes(req.file.mimetype);
-  if (!isText) {
-    return res.status(415).json({ error: 'Only .txt and .md files are supported' });
+  let text;
+  try {
+    text = await extractText(req.file);
+  } catch (err) {
+    return res.status(415).json({ error: err.message });
   }
 
-  const text = req.file.buffer.toString('utf8');
   const chunks = chunkText(text);
-  if (chunks.length === 0) return res.status(400).json({ error: 'File is empty' });
+  if (chunks.length === 0) {
+    return res.status(400).json({ error: 'File contained no extractable text' });
+  }
 
   try {
     const document = await prisma.document.create({
       data: {
         userId: req.userId,
-        filename,
-        contentType: req.file.mimetype || 'text/plain',
+        filename: req.file.originalname,
+        contentType: req.file.mimetype || 'application/octet-stream',
       },
     });
 
@@ -173,7 +175,11 @@ app.post('/api/documents', requireAuth, docUpload.single('file'), async (req, re
       `;
     }
 
-    res.status(201).json({ id: document.id, filename, chunks: chunks.length });
+    res.status(201).json({
+      id: document.id,
+      filename: req.file.originalname,
+      chunks: chunks.length,
+    });
   } catch (err) {
     console.error('Document ingest error:', err.message);
     res.status(500).json({ error: 'Failed to ingest document' });
