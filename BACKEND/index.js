@@ -276,42 +276,72 @@ function sendSSE(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-async function streamFromModel(res, messages) {
-  const upstream = await axios.post(
-    QWEN_STREAM_URL,
-    { messages },
-    { responseType: 'stream' }
-  );
+async function streamFromModel(res, messages, req) {
+  const controller = new AbortController();
+  let aborted = false;
 
-  return new Promise((resolve, reject) => {
-    let fullText = '';
-    let buffer = '';
+  const onClose = () => {
+    if (!aborted) {
+      aborted = true;
+      controller.abort();
+    }
+  };
+  req.on('close', onClose);
 
-    upstream.data.on('data', (chunk) => {
-      buffer += chunk.toString();
-      const events = buffer.split('\n\n');
-      buffer = events.pop();
-      for (const event of events) {
-        if (!event.startsWith('data:')) continue;
-        const payload = event.slice(5).trim();
-        if (!payload) continue;
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed.text) {
-            fullText += parsed.text;
-            sendSSE(res, { text: parsed.text });
-          } else if (parsed.error) {
-            sendSSE(res, { error: parsed.error });
+  try {
+    const upstream = await axios.post(
+      QWEN_STREAM_URL,
+      { messages },
+      { responseType: 'stream', signal: controller.signal }
+    );
+
+    return await new Promise((resolve, reject) => {
+      let fullText = '';
+      let buffer = '';
+
+      upstream.data.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+        for (const event of events) {
+          if (!event.startsWith('data:')) continue;
+          const payload = event.slice(5).trim();
+          if (!payload) continue;
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed.text) {
+              fullText += parsed.text;
+              if (!aborted) sendSSE(res, { text: parsed.text });
+            } else if (parsed.error && !aborted) {
+              sendSSE(res, { error: parsed.error });
+            }
+          } catch {
+            // skip malformed line
           }
-        } catch {
-          // skip malformed line
         }
-      }
-    });
+      });
 
-    upstream.data.on('end', () => resolve(fullText));
-    upstream.data.on('error', reject);
-  });
+      upstream.data.on('end', () => resolve({ fullText, aborted }));
+      upstream.data.on('error', (err) => {
+        if (aborted) resolve({ fullText, aborted });
+        else reject(err);
+      });
+    });
+  } catch (err) {
+    if (aborted) return { fullText: '', aborted: true };
+    throw err;
+  } finally {
+    req.off('close', onClose);
+  }
+}
+
+async function persistAssistantMessage(chatId, text) {
+  if (!text) return;
+  try {
+    await prisma.message.create({ data: { chatId, role: 'model', text } });
+  } catch (err) {
+    console.error('Persist assistant message error:', err.message);
+  }
 }
 
 // ─── Chats ────────────────────────────────────────────────────────────
@@ -347,19 +377,24 @@ app.post('/api/chats', requireAuth, async (req, res) => {
     const retrieved = await retrievedPromise;
     const augmented = buildAugmentedPrompt(text, retrieved);
 
-    const fullText = await streamFromModel(res, [
-      buildUserTurn({ augmentedText: augmented }),
-    ]);
+    const { fullText, aborted } = await streamFromModel(
+      res,
+      [buildUserTurn({ augmentedText: augmented })],
+      req
+    );
 
-    await prisma.message.create({
-      data: { chatId: chat.id, role: 'model', text: fullText },
-    });
-    sendSSE(res, { done: true });
-    res.end();
+    await persistAssistantMessage(chat.id, fullText);
+
+    if (!aborted) {
+      sendSSE(res, { done: true });
+      res.end();
+    }
   } catch (err) {
     console.error('Stream chat error:', err.message);
-    sendSSE(res, { error: err.message });
-    res.end();
+    if (!res.writableEnded) {
+      sendSSE(res, { error: err.message });
+      res.end();
+    }
   }
 });
 
@@ -426,17 +461,20 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
 
     history.push(buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
 
-    const fullText = await streamFromModel(res, history);
+    const { fullText, aborted } = await streamFromModel(res, history, req);
 
-    await prisma.message.create({
-      data: { chatId: chat.id, role: 'model', text: fullText },
-    });
-    sendSSE(res, { done: true });
-    res.end();
+    await persistAssistantMessage(chat.id, fullText);
+
+    if (!aborted) {
+      sendSSE(res, { done: true });
+      res.end();
+    }
   } catch (err) {
     console.error('Stream chat error:', err.message);
-    sendSSE(res, { error: err.message });
-    res.end();
+    if (!res.writableEnded) {
+      sendSSE(res, { error: err.message });
+      res.end();
+    }
   }
 });
 

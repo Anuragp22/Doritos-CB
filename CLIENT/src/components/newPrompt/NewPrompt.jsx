@@ -21,13 +21,19 @@ const NewPrompt = ({ data }) => {
 
   const endRef = useRef(null);
   const formRef = useRef(null);
+  const controllerRef = useRef(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [data, question, answer, img.dbData]);
 
+  useEffect(() => () => controllerRef.current?.abort(), []);
+
   const sendTurn = async (text) => {
+    controllerRef.current?.abort();
+    controllerRef.current = new AbortController();
+
     setQuestion(text);
     setAnswer('');
     setError('');
@@ -42,6 +48,7 @@ const NewPrompt = ({ data }) => {
           question: text,
           img: img.dbData?.filePath || undefined,
         }),
+        signal: controllerRef.current.signal,
       });
 
       await readSSEStream(res, (event) => {
@@ -55,7 +62,7 @@ const NewPrompt = ({ data }) => {
       setAnswer('');
       setImg({ isLoading: false, error: '', dbData: {}, aiData: {} });
     } catch (err) {
-      setError(err.message);
+      if (err.name !== 'AbortError') setError(err.message);
     } finally {
       setIsStreaming(false);
     }

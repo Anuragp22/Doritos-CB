@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import Markdown from 'react-markdown';
@@ -16,10 +16,16 @@ const DashboardPage = () => {
   const [error, setError] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
 
+  const controllerRef = useRef(null);
+  useEffect(() => () => controllerRef.current?.abort(), []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const text = e.target.text.value.trim();
     if (!text) return;
+
+    controllerRef.current?.abort();
+    controllerRef.current = new AbortController();
 
     setSubmittedText(text);
     setStreamingAnswer('');
@@ -33,6 +39,7 @@ const DashboardPage = () => {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
+        signal: controllerRef.current.signal,
       });
 
       await readSSEStream(res, (event) => {
@@ -44,7 +51,7 @@ const DashboardPage = () => {
       queryClient.invalidateQueries({ queryKey: ['userChats'] });
       if (chatId) navigate(`/dashboard/chats/${chatId}`);
     } catch (err) {
-      setError(err.message);
+      if (err.name !== 'AbortError') setError(err.message);
     } finally {
       setIsStreaming(false);
     }
