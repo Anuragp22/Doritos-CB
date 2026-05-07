@@ -13,6 +13,7 @@ import { requireAuth, signToken, cookieOptions } from './middleware/auth.js';
 import { chunkText } from './lib/chunk.js';
 import { embed } from './lib/embed.js';
 import { extractText } from './lib/extract.js';
+import { pruneHistory } from './lib/history.js';
 import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 
 const port = process.env.PORT || 3000;
@@ -460,8 +461,9 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
     const augmented = buildAugmentedPrompt(question, retrieved);
 
     history.push(buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
+    const pruned = pruneHistory(history);
 
-    const { fullText, aborted } = await streamFromModel(res, history, req);
+    const { fullText, aborted } = await streamFromModel(res, pruned, req);
 
     await persistAssistantMessage(chat.id, fullText);
 
