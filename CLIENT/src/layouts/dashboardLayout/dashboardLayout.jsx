@@ -1,7 +1,9 @@
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Loader2, Menu } from 'lucide-react';
 import ChatList from '@/components/chatList/chatList';
+import SidebarBrand from '@/components/sidebarBrand/SidebarBrand';
+import UserPanel from '@/components/userPanel/UserPanel';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +12,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+
+const SidebarContents = () => (
+  <div className="flex h-full flex-col">
+    <SidebarBrand />
+    <div className="flex-1 overflow-hidden">
+      <ChatList />
+    </div>
+    <UserPanel />
+  </div>
+);
 
 const DashboardLayout = () => {
   const { user, isLoaded } = useAuth();
@@ -27,20 +39,20 @@ const DashboardLayout = () => {
 
   if (!isLoaded) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
+      <div className="flex h-screen items-center justify-center text-muted-foreground">
         <Loader2 className="size-5 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col md:grid md:grid-cols-[280px_1fr]">
+    <div className="flex h-screen flex-col md:grid md:grid-cols-[260px_1fr]">
       <aside className="hidden h-full border-r border-border bg-card md:block">
-        <ChatList />
+        <SidebarContents />
       </aside>
 
       <div className="flex h-full flex-col overflow-hidden bg-background">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden">
+        <div className="flex items-center justify-between border-b border-border bg-card px-3 py-2 md:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <Button
               type="button"
@@ -51,14 +63,20 @@ const DashboardLayout = () => {
             >
               <Menu className="size-5" />
             </Button>
-            <SheetContent side="left" className="w-72 p-0">
+            <SheetContent side="left" className="w-72 bg-card p-0">
               <SheetHeader className="sr-only">
                 <SheetTitle>Navigation</SheetTitle>
               </SheetHeader>
-              <ChatList />
+              <SidebarContents />
             </SheetContent>
           </Sheet>
-          <span className="text-sm font-medium">Doritos AI</span>
+          <Link to="/dashboard" className="flex items-center gap-2 font-serif text-base font-semibold">
+            <img src="/logo.png" alt="" className="size-5" />
+            <span>
+              Doritos <em className="font-normal italic text-primary">AI</em>
+            </span>
+          </Link>
+          <span className="size-9" aria-hidden />
         </div>
         <section className="flex-1 overflow-hidden">
           <Outlet />
