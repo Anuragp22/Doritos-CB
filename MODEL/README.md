@@ -194,5 +194,6 @@ modal run MODEL/train.py \
 modal deploy MODEL/modal_app.py
 ```
 
-Cheaper alternative: pass `--qlora True --gpu T4` for 4-bit QLoRA on a T4
-(slower per step but ~half the GPU cost).
+Defaults: T4 GPU + 4-bit QLoRA + fp16 (~$0.30–0.60 per fine-tune). Pass
+`--qlora False` and edit `gpu="T4"` to `gpu="A10G"` in `train.py` if you
+specifically need bf16 or the extra speed.

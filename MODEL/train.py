@@ -29,9 +29,9 @@ End-to-end workflow
 
 GPU choice
 ----------
-Default A10G (24 GB) handles 2B LoRA bf16 with batch_size=1, grad_accum=8
-comfortably. Switch `gpu="T4"` and pass `--qlora True` for 4-bit QLoRA on
-the cheaper T4 if cost matters more than speed.
+Default T4 (16 GB, ~$0.59/hr) with QLoRA 4-bit + fp16 — comfortable for 2B
+LoRA SFT and the cheapest tier on Modal. Pass `--qlora False --gpu A10G` only
+if you specifically need bf16 or the extra speed.
 """
 
 from pathlib import Path
@@ -69,7 +69,7 @@ image = (
 
 @app.function(
     image=image,
-    gpu="A10G",
+    gpu="T4",
     volumes={
         "/root/.cache/huggingface": hf_cache,
         "/data": datasets_vol,
@@ -84,7 +84,7 @@ def train(
     learning_rate: float = 1.0e-4,
     cutoff_len: int = 2048,
     lora_rank: int = 16,
-    qlora: bool = False,
+    qlora: bool = True,
     merge: bool = True,
     output_name: str | None = None,
 ):
@@ -135,7 +135,8 @@ def train(
         "num_train_epochs": epochs,
         "lr_scheduler_type": "cosine",
         "warmup_ratio": 0.1,
-        "bf16": True,
+        # T4 has no bf16 tensor cores; use fp16. Switch to bf16 on A10G/L4/A100.
+        "fp16": True,
         "logging_steps": 10,
         "save_steps": 200,
         "plot_loss": True,
@@ -181,7 +182,7 @@ def main(
     epochs: float = 3.0,
     learning_rate: float = 1.0e-4,
     lora_rank: int = 16,
-    qlora: bool = False,
+    qlora: bool = True,
     merge: bool = True,
     output_name: str = "",
 ):

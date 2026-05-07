@@ -21,8 +21,8 @@ After `modal deploy`, Modal prints a public URL. Point the Express backend at it
 
 Cost / efficiency knobs
 -----------------------
-- `gpu="T4"` (16 GB) is plenty for 2B-AWQ and ~half the price of A10G. Switch to
-  `"A10G"` if you want lower latency or plan to swap in 7B-AWQ.
+- `gpu="T4"` (16 GB, ~$0.59/hr) is plenty for 2B-AWQ. Switch to `"A10G"` only if
+  you measure latency that's actually a problem or plan to swap in 7B-AWQ.
 - `min_containers=0` lets the app scale to zero and cost ~$0 when idle.
   Set `min_containers=1` during a demo to eliminate cold starts.
 - `scaledown_window=300` keeps a container warm for 5 min after the last
