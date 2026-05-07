@@ -336,10 +336,23 @@ async function streamFromModel(res, messages, req) {
   }
 }
 
-async function persistAssistantMessage(chatId, text) {
+function toSourcesPayload(retrievedChunks) {
+  if (!retrievedChunks?.length) return null;
+  return retrievedChunks.map((c, i) => ({
+    index: i + 1,
+    documentId: c.documentId,
+    filename: c.filename,
+    snippet: typeof c.text === 'string' ? c.text.slice(0, 600) : '',
+    score: typeof c.score === 'number' ? c.score : null,
+  }));
+}
+
+async function persistAssistantMessage(chatId, text, sources) {
   if (!text) return;
   try {
-    await prisma.message.create({ data: { chatId, role: 'model', text } });
+    await prisma.message.create({
+      data: { chatId, role: 'model', text, sources: sources ?? undefined },
+    });
   } catch (err) {
     console.error('Persist assistant message error:', err.message);
   }
@@ -376,6 +389,9 @@ app.post('/api/chats', requireAuth, async (req, res) => {
 
   try {
     const retrieved = await retrievedPromise;
+    const sources = toSourcesPayload(retrieved);
+    if (sources) sendSSE(res, { sources });
+
     const augmented = buildAugmentedPrompt(text, retrieved);
 
     const { fullText, aborted } = await streamFromModel(
@@ -384,7 +400,7 @@ app.post('/api/chats', requireAuth, async (req, res) => {
       req
     );
 
-    await persistAssistantMessage(chat.id, fullText);
+    await persistAssistantMessage(chat.id, fullText, sources);
 
     if (!aborted) {
       sendSSE(res, { done: true });
@@ -458,6 +474,9 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
 
   try {
     const [, retrieved] = await Promise.all([savePromise, retrievedPromise]);
+    const sources = toSourcesPayload(retrieved);
+    if (sources) sendSSE(res, { sources });
+
     const augmented = buildAugmentedPrompt(question, retrieved);
 
     history.push(buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
@@ -465,7 +484,7 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
 
     const { fullText, aborted } = await streamFromModel(res, pruned, req);
 
-    await persistAssistantMessage(chat.id, fullText);
+    await persistAssistantMessage(chat.id, fullText, sources);
 
     if (!aborted) {
       sendSSE(res, { done: true });

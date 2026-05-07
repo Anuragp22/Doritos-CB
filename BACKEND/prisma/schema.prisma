@@ -36,6 +36,7 @@ model Message {
   role      Role
   text      String
   imageUrl  String?
+  sources   Json?
   createdAt DateTime @default(now())
 
   @@index([chatId])
