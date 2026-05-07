@@ -14,11 +14,6 @@ const ChatList = () => {
   return (
     <div className='chatList'>
       <Link to='/dashboard'>Create a new Chat</Link>
-      {/* <Link to='/'>Explore Doritos AI</Link>
-      <Link to='/'>Contact</Link> */}
-      <Link to='https://ff7a0470a5d85563c4.gradio.live' target='_blank'>
-        Training
-      </Link>
       <hr />
       <span className='title'>RECENT CHATS</span>
       <div className='list'>

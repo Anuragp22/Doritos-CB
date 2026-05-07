@@ -230,13 +230,6 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   }
 });
 
-// ─── Production static fallback ───────────────────────────────────────
-
-app.use(express.static(path.join(__dirname, '../client/dist')));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
-});
-
 // ─── Error handler ────────────────────────────────────────────────────
 
 app.use((err, req, res, next) => {
