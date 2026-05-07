@@ -17,6 +17,8 @@ import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 
 const port = process.env.PORT || 3000;
 const QWEN_API_URL = process.env.QWEN_API_URL;
+const QWEN_STREAM_URL = process.env.QWEN_STREAM_URL ||
+  (QWEN_API_URL ? QWEN_API_URL.replace(/\/generate$/, '/generate/stream') : null);
 
 if (!process.env.JWT_SECRET) {
   console.error('Missing JWT_SECRET in environment.');
@@ -262,39 +264,97 @@ function buildUserTurn({ augmentedText, imageUrl }) {
   return { role: 'user', content };
 }
 
+function setupSSE(res) {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+}
+
+function sendSSE(res, data) {
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+async function streamFromModel(res, messages) {
+  const upstream = await axios.post(
+    QWEN_STREAM_URL,
+    { messages },
+    { responseType: 'stream' }
+  );
+
+  return new Promise((resolve, reject) => {
+    let fullText = '';
+    let buffer = '';
+
+    upstream.data.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const events = buffer.split('\n\n');
+      buffer = events.pop();
+      for (const event of events) {
+        if (!event.startsWith('data:')) continue;
+        const payload = event.slice(5).trim();
+        if (!payload) continue;
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.text) {
+            fullText += parsed.text;
+            sendSSE(res, { text: parsed.text });
+          } else if (parsed.error) {
+            sendSSE(res, { error: parsed.error });
+          }
+        } catch {
+          // skip malformed line
+        }
+      }
+    });
+
+    upstream.data.on('end', () => resolve(fullText));
+    upstream.data.on('error', reject);
+  });
+}
+
 // ─── Chats ────────────────────────────────────────────────────────────
 
 app.post('/api/chats', requireAuth, async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
 
+  let chat;
+  try {
+    chat = await prisma.chat.create({
+      data: {
+        userId: req.userId,
+        title: text.substring(0, 40),
+        messages: { create: [{ role: 'user', text }] },
+      },
+      select: { id: true },
+    });
+  } catch (err) {
+    console.error('Create chat error:', err.message);
+    return res.status(500).json({ error: 'Error creating chat' });
+  }
+
+  setupSSE(res);
+  sendSSE(res, { chatId: chat.id });
+
   try {
     const retrieved = await retrieveContext(text, req.userId);
     const augmented = buildAugmentedPrompt(text, retrieved);
 
-    const qwenResponse = await axios.post(QWEN_API_URL, {
-      messages: [buildUserTurn({ augmentedText: augmented })],
-    });
-    const answer = qwenResponse.data.description;
+    const fullText = await streamFromModel(res, [
+      buildUserTurn({ augmentedText: augmented }),
+    ]);
 
-    const chat = await prisma.chat.create({
-      data: {
-        userId: req.userId,
-        title: text.substring(0, 40),
-        messages: {
-          create: [
-            { role: 'user', text },
-            { role: 'model', text: answer },
-          ],
-        },
-      },
-      select: { id: true },
+    await prisma.message.create({
+      data: { chatId: chat.id, role: 'model', text: fullText },
     });
-
-    res.status(201).json({ id: chat.id });
+    sendSSE(res, { done: true });
+    res.end();
   } catch (err) {
-    console.error('Create chat error:', err.message);
-    res.status(500).json({ error: 'Error creating chat' });
+    console.error('Stream chat error:', err.message);
+    sendSSE(res, { error: err.message });
+    res.end();
   }
 });
 
@@ -330,33 +390,45 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
   const { question, img } = req.body;
   if (!question) return res.status(400).json({ error: 'question required' });
 
-  try {
-    const chat = await prisma.chat.findFirst({
-      where: { id: req.params.id, userId: req.userId },
-      select: { id: true },
-    });
-    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+  const chat = await prisma.chat.findFirst({
+    where: { id: req.params.id, userId: req.userId },
+    select: { id: true },
+  });
+  if (!chat) return res.status(404).json({ error: 'Chat not found' });
 
+  let userMessage;
+  try {
+    userMessage = await prisma.message.create({
+      data: { chatId: chat.id, role: 'user', text: question, imageUrl: img || null },
+    });
+  } catch (err) {
+    console.error('Save user message error:', err.message);
+    return res.status(500).json({ error: 'Error saving user message' });
+  }
+
+  setupSSE(res);
+
+  try {
     const retrieved = await retrieveContext(question, req.userId);
     const augmented = buildAugmentedPrompt(question, retrieved);
 
     const history = await loadHistoryMessages(chat.id);
+    // Strip the just-saved user message so we can replace its text with the
+    // augmented version while keeping prior turns intact.
+    history.pop();
     history.push(buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
 
-    const qwenResponse = await axios.post(QWEN_API_URL, { messages: history });
-    const answer = qwenResponse.data.description;
+    const fullText = await streamFromModel(res, history);
 
-    await prisma.message.createMany({
-      data: [
-        { chatId: chat.id, role: 'user', text: question, imageUrl: img || null },
-        { chatId: chat.id, role: 'model', text: answer },
-      ],
+    await prisma.message.create({
+      data: { chatId: chat.id, role: 'model', text: fullText },
     });
-
-    res.json({ ok: true });
+    sendSSE(res, { done: true });
+    res.end();
   } catch (err) {
-    console.error('Update chat error:', err.message);
-    res.status(500).json({ error: 'Error updating chat' });
+    console.error('Stream chat error:', err.message);
+    sendSSE(res, { error: err.message });
+    res.end();
   }
 });
 

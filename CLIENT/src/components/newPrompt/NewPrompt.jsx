@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import './newPrompt.css';
 import Upload from '../upload/upload';
 import Markdown from 'react-markdown';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { readSSEStream } from '../../lib/stream';
+
+const API = import.meta.env.VITE_API_URL;
 
 const NewPrompt = ({ data }) => {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
+  const [error, setError] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const [img, setImg] = useState({
     isLoading: false,
     error: '',
@@ -16,122 +21,58 @@ const NewPrompt = ({ data }) => {
 
   const endRef = useRef(null);
   const formRef = useRef(null);
-
-  useEffect(() => {
-    endRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [data, question, answer, img.dbData]);
-
   const queryClient = useQueryClient();
 
-  const mutation = useMutation({
-    mutationFn: () => {
-      return fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data.id}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: question.length ? question : undefined,
-          answer,
-          img: img.dbData?.filePath || undefined,
-        }),
-      }).then((res) => res.json());
-    },
-    onSuccess: () => {
-      queryClient
-        .invalidateQueries({ queryKey: ['chat', data.id] })
-        .then(() => {
-          formRef.current.reset();
-          setQuestion('');
-          setAnswer('');
-          setImg({
-            isLoading: false,
-            error: '',
-            dbData: {},
-            aiData: {},
-          });
-        });
-    },
-    onError: (err) => {
-      console.log(err);
-    },
-  });
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [data, question, answer, img.dbData]);
 
-  const add = async (text, isInitial) => {
-    if (!isInitial) setQuestion(text); // Set the user question
+  const sendTurn = async (text) => {
+    setQuestion(text);
+    setAnswer('');
+    setError('');
+    setIsStreaming(true);
 
     try {
-      console.log('Image URL:', img.dbData.filePath); // Check before forming payload
+      const res = await fetch(`${API}/api/chats/${data.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: text,
+          img: img.dbData?.filePath || undefined,
+        }),
+      });
 
-      const payload = {
-        user_text: text || null,
-        image_url: img.dbData?.filePath || null, // Ensure filePath is used
-      };
-      console.log('Payload:', payload);
+      await readSSEStream(res, (event) => {
+        if (event.text) setAnswer((prev) => prev + event.text);
+        else if (event.error) setError(event.error);
+      });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/generate`, // Use your backend URL
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Request failed with status ${response.status}: ${errorText}`
-        );
-      }
-
-      const data = await response.json();
-      const { description } = data; // Extract description or explanation
-
-      setAnswer(description); // Update the answer in the UI
-
-      // Update the conversation history in the database
-      mutation.mutate();
+      await queryClient.invalidateQueries({ queryKey: ['chat', data.id] });
+      formRef.current?.reset();
+      setQuestion('');
+      setAnswer('');
+      setImg({ isLoading: false, error: '', dbData: {}, aiData: {} });
     } catch (err) {
-      console.error('Error in add function:', err);
+      setError(err.message);
+    } finally {
+      setIsStreaming(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    const text = e.target.text.value;
+    const text = e.target.text.value.trim();
     if (!text) return;
-
-    add(text, false);
+    sendTurn(text);
   };
-
-  // IN PRODUCTION WE DON'T NEED IT
-  const hasRun = useRef(false);
-
-  useEffect(() => {
-    if (!hasRun.current) {
-      if (data?.messages?.length === 1) {
-        add(data.messages[0].text || '', true);
-      }
-    }
-    hasRun.current = true;
-  }, [data]);
 
   return (
     <>
-      {/* ADD NEW CHAT */}
-      {img.isLoading && <div>Loading...</div>}
+      {img.isLoading && <div>Loading…</div>}
       {img.dbData?.filePath && (
-        <img
-          src={img.dbData.filePath}
-          alt='Uploaded Preview'
-          style={{ width: '380px' }}
-        />
+        <img src={img.dbData.filePath} alt='Uploaded preview' style={{ width: '380px' }} />
       )}
       {question && <div className='message user'>{question}</div>}
       {answer && (
@@ -139,13 +80,19 @@ const NewPrompt = ({ data }) => {
           <Markdown>{answer}</Markdown>
         </div>
       )}
+      {error && <div className='message error'>{error}</div>}
 
       <div className='endChat' ref={endRef}></div>
       <form className='newForm' onSubmit={handleSubmit} ref={formRef}>
         <Upload setImg={setImg} />
         <input id='file' type='file' multiple={false} hidden />
-        <input type='text' name='text' placeholder='Ask anything...' />
-        <button>
+        <input
+          type='text'
+          name='text'
+          placeholder='Ask anything…'
+          disabled={isStreaming}
+        />
+        <button type='submit' disabled={isStreaming}>
           <img src='/arrow.png' alt='' />
         </button>
       </form>

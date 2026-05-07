@@ -11,17 +11,20 @@ Environment variables:
     PORT            Bind port (default: 5000).
 """
 
+import json
 import os
 from contextlib import asynccontextmanager
+from threading import Thread
 from typing import List, Optional
 
 import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from qwen_vl_utils import process_vision_info
 from sentence_transformers import CrossEncoder, SentenceTransformer
-from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, TextIteratorStreamer
 
 DEFAULT_MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2-VL-2B-Instruct")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "BAAI/bge-small-en-v1.5")
@@ -181,20 +184,9 @@ def generate(req: GenerateRequest) -> GenerateResponse:
     if _state["model"] is None or _state["processor"] is None:
         raise HTTPException(503, "VLM not loaded.")
 
-    messages = _build_messages(req)
     processor = _state["processor"]
     model = _state["model"]
-
-    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    image_inputs, video_inputs = process_vision_info(messages)
-
-    inputs = processor(
-        text=[text],
-        images=image_inputs if _has_image(messages) else None,
-        videos=video_inputs,
-        padding=True,
-        return_tensors="pt",
-    ).to(DEVICE)
+    inputs = _prepare_inputs(req)
 
     with torch.no_grad():
         generated = model.generate(**inputs, max_new_tokens=req.max_new_tokens)
@@ -204,6 +196,57 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )
     return GenerateResponse(description=output[0])
+
+
+def _prepare_inputs(req: GenerateRequest):
+    messages = _build_messages(req)
+    processor = _state["processor"]
+    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    image_inputs, video_inputs = process_vision_info(messages)
+    inputs = processor(
+        text=[text],
+        images=image_inputs if _has_image(messages) else None,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pt",
+    ).to(DEVICE)
+    return inputs
+
+
+@app.post("/generate/stream")
+def generate_stream(req: GenerateRequest):
+    if not req.user_text and not req.image_url and not req.messages:
+        raise HTTPException(400, "Provide messages or user_text/image_url.")
+    if _state["model"] is None or _state["processor"] is None:
+        raise HTTPException(503, "VLM not loaded.")
+
+    processor = _state["processor"]
+    model = _state["model"]
+    inputs = _prepare_inputs(req)
+
+    streamer = TextIteratorStreamer(
+        processor.tokenizer, skip_prompt=True, skip_special_tokens=True
+    )
+    generation_kwargs = dict(
+        **inputs, streamer=streamer, max_new_tokens=req.max_new_tokens
+    )
+
+    def run_generation():
+        with torch.no_grad():
+            model.generate(**generation_kwargs)
+
+    Thread(target=run_generation, daemon=True).start()
+
+    def event_stream():
+        try:
+            for new_text in streamer:
+                if new_text:
+                    yield f"data: {json.dumps({'text': new_text})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except Exception as exc:  # noqa: BLE001
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/embed", response_model=EmbedResponse)

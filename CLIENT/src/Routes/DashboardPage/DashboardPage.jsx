@@ -1,36 +1,71 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import './DashboardPage.css';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import Markdown from 'react-markdown';
+import './DashboardPage.css';
+import { readSSEStream } from '../../lib/stream';
+
+const API = import.meta.env.VITE_API_URL;
 
 const DashboardPage = () => {
   const queryClient = useQueryClient();
-
   const navigate = useNavigate();
 
-  const mutation = useMutation({
-    mutationFn: (text) => {
-      return fetch(`${import.meta.env.VITE_API_URL}/api/chats`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      }).then((res) => res.json());
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['userChats'] });
-      navigate(`/dashboard/chats/${data.id}`);
-    },
-  });
+  const [submittedText, setSubmittedText] = useState('');
+  const [streamingAnswer, setStreamingAnswer] = useState('');
+  const [error, setError] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const text = e.target.text.value;
+    const text = e.target.text.value.trim();
     if (!text) return;
 
-    mutation.mutate(text);
+    setSubmittedText(text);
+    setStreamingAnswer('');
+    setError('');
+    setIsStreaming(true);
+
+    let chatId = null;
+    try {
+      const res = await fetch(`${API}/api/chats`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+
+      await readSSEStream(res, (event) => {
+        if (event.chatId) chatId = event.chatId;
+        else if (event.text) setStreamingAnswer((prev) => prev + event.text);
+        else if (event.error) setError(event.error);
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['userChats'] });
+      if (chatId) navigate(`/dashboard/chats/${chatId}`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsStreaming(false);
+    }
   };
+
+  if (isStreaming || streamingAnswer) {
+    return (
+      <div className='dashboardPage streaming'>
+        <div className='streamPreview'>
+          <div className='message user'>{submittedText}</div>
+          {streamingAnswer && (
+            <div className='message'>
+              <Markdown>{streamingAnswer}</Markdown>
+            </div>
+          )}
+          {error && <div className='streamError'>{error}</div>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='dashboardPage'>
       <div className='texts'>
@@ -56,7 +91,7 @@ const DashboardPage = () => {
       <div className='formContainer'>
         <form onSubmit={handleSubmit}>
           <input type='text' name='text' placeholder='Ask me anything...' />
-          <button>
+          <button type='submit'>
             <img src='/arrow.png' alt='' />
           </button>
         </form>
