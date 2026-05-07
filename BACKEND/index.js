@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'node:crypto';
 import axios from 'axios';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
@@ -9,6 +10,9 @@ import cookieParser from 'cookie-parser';
 
 import prisma from './lib/prisma.js';
 import { requireAuth, signToken, cookieOptions } from './middleware/auth.js';
+import { chunkText } from './lib/chunk.js';
+import { embed } from './lib/embed.js';
+import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 
 const port = process.env.PORT || 3000;
 const QWEN_API_URL = process.env.QWEN_API_URL;
@@ -54,6 +58,11 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 // ─── Auth ─────────────────────────────────────────────────────────────
 
@@ -128,6 +137,99 @@ app.post('/upload', requireAuth, upload.single('file'), (req, res) => {
   res.json({ fileUrl });
 });
 
+// ─── Documents (RAG) ──────────────────────────────────────────────────
+
+app.post('/api/documents', requireAuth, docUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const filename = req.file.originalname;
+  const isText = /\.(txt|md|markdown)$/i.test(filename) ||
+    ['text/plain', 'text/markdown'].includes(req.file.mimetype);
+  if (!isText) {
+    return res.status(415).json({ error: 'Only .txt and .md files are supported' });
+  }
+
+  const text = req.file.buffer.toString('utf8');
+  const chunks = chunkText(text);
+  if (chunks.length === 0) return res.status(400).json({ error: 'File is empty' });
+
+  try {
+    const document = await prisma.document.create({
+      data: {
+        userId: req.userId,
+        filename,
+        contentType: req.file.mimetype || 'text/plain',
+      },
+    });
+
+    const embeddings = await embed(chunks);
+
+    for (let i = 0; i < chunks.length; i++) {
+      const id = randomUUID();
+      const vec = `[${embeddings[i].join(',')}]`;
+      await prisma.$executeRaw`
+        INSERT INTO "DocumentChunk" (id, "documentId", "chunkIndex", text, embedding)
+        VALUES (${id}, ${document.id}, ${i}, ${chunks[i]}, ${vec}::vector)
+      `;
+    }
+
+    res.status(201).json({ id: document.id, filename, chunks: chunks.length });
+  } catch (err) {
+    console.error('Document ingest error:', err.message);
+    res.status(500).json({ error: 'Failed to ingest document' });
+  }
+});
+
+app.get('/api/documents', requireAuth, async (req, res) => {
+  try {
+    const docs = await prisma.document.findMany({
+      where: { userId: req.userId },
+      select: {
+        id: true,
+        filename: true,
+        contentType: true,
+        createdAt: true,
+        _count: { select: { chunks: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(
+      docs.map((d) => ({
+        id: d.id,
+        filename: d.filename,
+        contentType: d.contentType,
+        createdAt: d.createdAt,
+        chunkCount: d._count.chunks,
+      }))
+    );
+  } catch (err) {
+    console.error('Fetch documents error:', err);
+    res.status(500).json({ error: 'Error fetching documents' });
+  }
+});
+
+app.delete('/api/documents/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await prisma.document.deleteMany({
+      where: { id: req.params.id, userId: req.userId },
+    });
+    if (result.count === 0) return res.status(404).json({ error: 'Document not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete document error:', err);
+    res.status(500).json({ error: 'Error deleting document' });
+  }
+});
+
+async function retrieveContext(query, userId) {
+  try {
+    return await hybridRetrieve(query, userId);
+  } catch (err) {
+    console.error('RAG retrieval failed (continuing without context):', err.message);
+    return [];
+  }
+}
+
 // ─── Chats ────────────────────────────────────────────────────────────
 
 app.post('/api/chats', requireAuth, async (req, res) => {
@@ -135,8 +237,11 @@ app.post('/api/chats', requireAuth, async (req, res) => {
   if (!text) return res.status(400).json({ error: 'text required' });
 
   try {
+    const retrieved = await retrieveContext(text, req.userId);
+    const augmented = buildAugmentedPrompt(text, retrieved);
+
     const qwenResponse = await axios.post(QWEN_API_URL, {
-      user_text: text,
+      user_text: augmented,
       image_url: null,
     });
     const answer = qwenResponse.data.description;
@@ -201,8 +306,11 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
     });
     if (!chat) return res.status(404).json({ error: 'Chat not found' });
 
+    const retrieved = await retrieveContext(question, req.userId);
+    const augmented = buildAugmentedPrompt(question, retrieved);
+
     const qwenResponse = await axios.post(QWEN_API_URL, {
-      user_text: question,
+      user_text: augmented,
       image_url: img || null,
     });
     const answer = qwenResponse.data.description;

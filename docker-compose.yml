@@ -23,6 +23,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-doritos}:${POSTGRES_PASSWORD:-doritos}@postgres:5432/${POSTGRES_DB:-doritos}?schema=public
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set it in .env}
       QWEN_API_URL: ${QWEN_API_URL:-http://host.docker.internal:5000/generate}
+      EMBED_API_URL: ${EMBED_API_URL:-http://host.docker.internal:5000/embed}
       NODE_ENV: ${NODE_ENV:-production}
     ports:
       - "3000:3000"
