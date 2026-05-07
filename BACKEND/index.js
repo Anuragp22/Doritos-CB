@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'node:fs/promises';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'node:crypto';
 import axios from 'axios';
@@ -239,9 +240,44 @@ async function retrieveContext(query, userId) {
   }
 }
 
-function dbMessageToQwen(message) {
+// Convert a stored upload URL (or any URL) into a payload the model can fetch
+// without reaching back into our network. Local /uploads/* paths get read from
+// disk and inlined as a base64 data URI so a remote model host (e.g. Modal)
+// receives the bytes directly. External URLs and existing data URIs pass
+// through unchanged.
+const MIME_BY_EXT = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+};
+
+async function imageUrlToInline(url) {
+  if (!url) return null;
+  if (url.startsWith('data:')) return url;
+  const idx = url.indexOf('/uploads/');
+  if (idx === -1) return url;
+  const filename = url.slice(idx + '/uploads/'.length).split(/[?#]/)[0];
+  const filePath = path.join(__dirname, 'uploads', filename);
+  try {
+    const bytes = await fs.readFile(filePath);
+    const ext = path.extname(filename).toLowerCase().slice(1);
+    const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+    return `data:${mime};base64,${bytes.toString('base64')}`;
+  } catch (err) {
+    console.error(`Failed to inline upload ${filename}:`, err.message);
+    return url;
+  }
+}
+
+async function dbMessageToQwen(message) {
   const content = [];
-  if (message.imageUrl) content.push({ type: 'image', image: message.imageUrl });
+  if (message.imageUrl) {
+    const inline = await imageUrlToInline(message.imageUrl);
+    if (inline) content.push({ type: 'image', image: inline });
+  }
   content.push({ type: 'text', text: message.text });
   return {
     role: message.role === 'model' ? 'assistant' : 'user',
@@ -255,12 +291,15 @@ async function loadHistoryMessages(chatId) {
     where: { chatId },
     orderBy: { createdAt: 'asc' },
   });
-  return prior.map(dbMessageToQwen);
+  return Promise.all(prior.map(dbMessageToQwen));
 }
 
-function buildUserTurn({ augmentedText, imageUrl }) {
+async function buildUserTurn({ augmentedText, imageUrl }) {
   const content = [];
-  if (imageUrl) content.push({ type: 'image', image: imageUrl });
+  if (imageUrl) {
+    const inline = await imageUrlToInline(imageUrl);
+    if (inline) content.push({ type: 'image', image: inline });
+  }
   content.push({ type: 'text', text: augmentedText });
   return { role: 'user', content };
 }
@@ -394,11 +433,8 @@ app.post('/api/chats', requireAuth, async (req, res) => {
 
     const augmented = buildAugmentedPrompt(text, retrieved);
 
-    const { fullText, aborted } = await streamFromModel(
-      res,
-      [buildUserTurn({ augmentedText: augmented })],
-      req
-    );
+    const userTurn = await buildUserTurn({ augmentedText: augmented });
+    const { fullText, aborted } = await streamFromModel(res, [userTurn], req);
 
     await persistAssistantMessage(chat.id, fullText, sources);
 
@@ -479,7 +515,7 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
 
     const augmented = buildAugmentedPrompt(question, retrieved);
 
-    history.push(buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
+    history.push(await buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
     const pruned = pruneHistory(history);
 
     const { fullText, aborted } = await streamFromModel(res, pruned, req);
@@ -507,7 +543,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     }
     const payload = {};
     if (user_text) payload.user_text = user_text;
-    if (image_url) payload.image_url = image_url;
+    if (image_url) payload.image_url = await imageUrlToInline(image_url);
 
     const response = await axios.post(QWEN_API_URL, payload, {
       headers: { 'Content-Type': 'application/json' },
