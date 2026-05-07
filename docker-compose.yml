@@ -52,10 +52,14 @@ services:
       HOST: 0.0.0.0
       PORT: 5000
       MODEL_ID: ${MODEL_ID:-Qwen/Qwen2-VL-2B-Instruct}
+      HF_HOME: /root/.cache/huggingface
     ports:
       - "5000:5000"
     profiles:
       - model
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+      - model_checkpoints:/app/checkpoints
     # deploy:
     #   resources:
     #     reservations:
@@ -67,3 +71,5 @@ services:
 volumes:
   postgres_data:
   backend_uploads:
+  huggingface_cache:
+  model_checkpoints:

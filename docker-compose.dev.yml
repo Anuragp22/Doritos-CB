@@ -19,3 +19,10 @@ services:
     volumes:
       - ./CLIENT:/app
       - /app/node_modules
+
+  model:
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
+    volumes:
+      - ./MODEL:/app
+      - huggingface_cache:/root/.cache/huggingface
+      - model_checkpoints:/app/checkpoints
