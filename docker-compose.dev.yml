@@ -27,3 +27,9 @@ services:
       - ./MODEL:/app
       - huggingface_cache:/root/.cache/huggingface
       - model_checkpoints:/app/checkpoints
+
+  trainer:
+    volumes:
+      - ./MODEL:/app
+      - huggingface_cache:/root/.cache/huggingface
+      - model_checkpoints:/app/checkpoints

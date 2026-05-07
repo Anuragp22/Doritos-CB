@@ -70,6 +70,31 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
+  # LLaMA-Factory Gradio Web UI for fine-tuning Qwen2-VL.
+  # Started on demand via: docker compose --profile model up trainer
+  # Note: training competes with the model service for GPU; run one at a time.
+  trainer:
+    build: ./MODEL
+    command: ["llamafactory-cli", "webui"]
+    environment:
+      GRADIO_SERVER_NAME: 0.0.0.0
+      GRADIO_SERVER_PORT: "7860"
+      HF_HOME: /root/.cache/huggingface
+    ports:
+      - "7860:7860"
+    profiles:
+      - model
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+      - model_checkpoints:/app/checkpoints
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
 volumes:
   postgres_data:
   backend_uploads:

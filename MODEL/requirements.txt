@@ -6,3 +6,4 @@ accelerate>=0.34
 qwen-vl-utils[decord]>=0.0.8
 pillow>=10
 sentence-transformers>=3.0
+llamafactory[torch,metrics]>=0.9.0
