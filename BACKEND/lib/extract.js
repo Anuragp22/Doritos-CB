@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'node:fs/promises';
 import mammoth from 'mammoth';
 import { extractText as extractPdfText, getDocumentProxy } from 'unpdf';
 import { load as loadHtml } from 'cheerio';
@@ -38,21 +39,24 @@ export async function extractText(file) {
   const filename = file.originalname || 'upload';
   const ext = path.extname(filename).toLowerCase();
   const mime = file.mimetype || '';
+  // Resolve bytes from an in-memory buffer (memoryStorage) or a disk path
+  // (diskStorage). Disk-based uploads only carry a path.
+  const buffer = file.buffer ?? (await fs.readFile(file.path));
 
   if (ext === '.pdf' || mime === 'application/pdf') {
-    return extractPdf(file.buffer);
+    return extractPdf(buffer);
   }
   if (
     ext === '.docx' ||
     mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ) {
-    return extractDocx(file.buffer);
+    return extractDocx(buffer);
   }
   if (ext === '.html' || ext === '.htm' || mime === 'text/html') {
-    return extractHtml(file.buffer);
+    return extractHtml(buffer);
   }
   if (TEXT_EXTENSIONS.has(ext) || mime.startsWith('text/') || mime === 'application/json') {
-    return file.buffer.toString('utf8');
+    return buffer.toString('utf8');
   }
 
   throw new Error(`Unsupported file type: ${ext || mime || 'unknown'}`);
