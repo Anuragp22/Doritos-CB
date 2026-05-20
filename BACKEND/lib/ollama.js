@@ -2,6 +2,10 @@ import axios from 'axios';
 
 // Adapter for a local Ollama service. Generation (text + vision) runs here;
 // embeddings/reranking stay on MODEL/server.py and are not handled in this file.
+//
+// Requests pass `think: false`: the default model (qwen3.5:2b) is a reasoning
+// model that otherwise emits ~1800 tokens of chain-of-thought before the
+// answer — minutes of latency on CPU. Disabling it keeps answers direct.
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const GEN_MODEL = process.env.GEN_MODEL || 'qwen3.5:2b';
 
@@ -32,7 +36,7 @@ export function toOllamaMessages(messages) {
 export async function* streamChat(messages, { signal } = {}) {
   const resp = await axios.post(
     `${OLLAMA_URL}/api/chat`,
-    { model: GEN_MODEL, messages: toOllamaMessages(messages), stream: true },
+    { model: GEN_MODEL, messages: toOllamaMessages(messages), stream: true, think: false },
     { responseType: 'stream', signal }
   );
 
@@ -66,6 +70,7 @@ export async function generateOnce({ user_text, image_url }) {
     model: GEN_MODEL,
     messages: toOllamaMessages([{ role: 'user', content }]),
     stream: false,
+    think: false,
   });
   return data.message?.content ?? '';
 }
