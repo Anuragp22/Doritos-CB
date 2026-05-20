@@ -3,6 +3,22 @@
 Local Python services that back the Doritos AI chat experience. Replaces the
 Kaggle/Colab notebooks that previously lived at the repo root.
 
+## Offline mode (default)
+
+The app runs fully offline on CPU. `docker compose up --build` starts:
+
+- `ollama` — generation runtime; `ollama-pull` pulls `GEN_MODEL` (default
+  `qwen3.5:2b`) on first start. The first pull needs internet (~2 GB) and is
+  cached in the `ollama_data` volume afterward.
+- `model` — `server.py` with `ENABLE_GENERATION=false`: it skips the VLM and
+  serves only `/embed` and `/rerank` on CPU.
+
+Generation is slow on CPU (~6–10 tok/s); a 2B model is the sweet spot. Swap it
+with `GEN_MODEL` (e.g. `gemma4:e2b`).
+
+The Modal/GPU path (`modal_app.py`, `train.py`, and `server.py`'s generation
+code) stays in the repo as the dormant cloud alternative.
+
 ## Contents
 
 | File | Purpose |
