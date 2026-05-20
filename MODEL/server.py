@@ -7,6 +7,8 @@ speaks to via QWEN_API_URL and EMBED_API_URL.
 Environment variables:
     MODEL_ID        Qwen repo id or local path (default: Qwen/Qwen2-VL-2B-Instruct).
     EMBED_MODEL_ID  Embedding model repo id (default: BAAI/bge-small-en-v1.5; 384 dims).
+    ENABLE_GENERATION  "false" to skip loading the VLM and serve only /embed and
+                    /rerank on CPU (default: "true").
     HOST            Bind address (default: 127.0.0.1).
     PORT            Bind port (default: 5000).
 """
@@ -29,6 +31,7 @@ from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, TextIte
 DEFAULT_MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2-VL-2B-Instruct")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "BAAI/bge-small-en-v1.5")
 RERANK_MODEL_ID = os.getenv("RERANK_MODEL_ID", "BAAI/bge-reranker-base")
+ENABLE_GENERATION = os.getenv("ENABLE_GENERATION", "true").lower() == "true"
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "5000"))
 
@@ -74,10 +77,13 @@ def _load_rerank(model_id: str) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        _load_vlm(DEFAULT_MODEL_ID)
-    except Exception as exc:
-        print(f"VLM load failed; /generate will return 503. Reason: {exc}")
+    if ENABLE_GENERATION:
+        try:
+            _load_vlm(DEFAULT_MODEL_ID)
+        except Exception as exc:
+            print(f"VLM load failed; /generate will return 503. Reason: {exc}")
+    else:
+        print("ENABLE_GENERATION=false — skipping VLM load (embed/rerank only).")
     try:
         _load_embed(EMBED_MODEL_ID)
     except Exception as exc:
