@@ -4,7 +4,6 @@ import path from 'path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'node:crypto';
-import axios from 'axios';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
@@ -16,6 +15,7 @@ import { embed } from './lib/embed.js';
 import { extractText } from './lib/extract.js';
 import { pruneHistory } from './lib/history.js';
 import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
+import { modelClient } from './lib/modelClient.js';
 
 const port = process.env.PORT || 3000;
 const QWEN_API_URL = process.env.QWEN_API_URL;
@@ -329,7 +329,7 @@ async function streamFromModel(res, messages, req) {
   req.on('close', onClose);
 
   try {
-    const upstream = await axios.post(
+    const upstream = await modelClient.post(
       QWEN_STREAM_URL,
       { messages },
       { responseType: 'stream', signal: controller.signal }
@@ -545,7 +545,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     if (user_text) payload.user_text = user_text;
     if (image_url) payload.image_url = await imageUrlToInline(image_url);
 
-    const response = await axios.post(QWEN_API_URL, payload, {
+    const response = await modelClient.post(QWEN_API_URL, payload, {
       headers: { 'Content-Type': 'application/json' },
     });
     res.status(200).json(response.data);
