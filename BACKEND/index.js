@@ -15,12 +15,9 @@ import { embed } from './lib/embed.js';
 import { extractText } from './lib/extract.js';
 import { pruneHistory } from './lib/history.js';
 import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
-import { modelClient } from './lib/modelClient.js';
+import { streamChat, generateOnce } from './lib/ollama.js';
 
 const port = process.env.PORT || 3000;
-const QWEN_API_URL = process.env.QWEN_API_URL;
-const QWEN_STREAM_URL = process.env.QWEN_STREAM_URL ||
-  (QWEN_API_URL ? QWEN_API_URL.replace(/\/generate$/, '/generate/stream') : null);
 
 if (!process.env.JWT_SECRET) {
   console.error('Missing JWT_SECRET in environment.');
@@ -30,8 +27,8 @@ if (!process.env.DATABASE_URL) {
   console.error('Missing DATABASE_URL in environment.');
   process.exit(1);
 }
-if (!QWEN_API_URL) {
-  console.warn('QWEN_API_URL not set — /api/chats and /api/generate will fail.');
+if (!process.env.OLLAMA_URL) {
+  console.warn('OLLAMA_URL not set — /api/chats and /api/generate will fail.');
 }
 
 const app = express();
@@ -319,6 +316,7 @@ function sendSSE(res, data) {
 async function streamFromModel(res, messages, req) {
   const controller = new AbortController();
   let aborted = false;
+  let fullText = '';
 
   const onClose = () => {
     if (!aborted) {
@@ -329,46 +327,13 @@ async function streamFromModel(res, messages, req) {
   req.on('close', onClose);
 
   try {
-    const upstream = await modelClient.post(
-      QWEN_STREAM_URL,
-      { messages },
-      { responseType: 'stream', signal: controller.signal }
-    );
-
-    return await new Promise((resolve, reject) => {
-      let fullText = '';
-      let buffer = '';
-
-      upstream.data.on('data', (chunk) => {
-        buffer += chunk.toString();
-        const events = buffer.split('\n\n');
-        buffer = events.pop() || '';
-        for (const event of events) {
-          if (!event.startsWith('data:')) continue;
-          const payload = event.slice(5).trim();
-          if (!payload) continue;
-          try {
-            const parsed = JSON.parse(payload);
-            if (parsed.text) {
-              fullText += parsed.text;
-              if (!aborted) sendSSE(res, { text: parsed.text });
-            } else if (parsed.error && !aborted) {
-              sendSSE(res, { error: parsed.error });
-            }
-          } catch {
-            // skip malformed line
-          }
-        }
-      });
-
-      upstream.data.on('end', () => resolve({ fullText, aborted }));
-      upstream.data.on('error', (err) => {
-        if (aborted) resolve({ fullText, aborted });
-        else reject(err);
-      });
-    });
+    for await (const delta of streamChat(messages, { signal: controller.signal })) {
+      fullText += delta;
+      if (!aborted) sendSSE(res, { text: delta });
+    }
+    return { fullText, aborted };
   } catch (err) {
-    if (aborted) return { fullText: '', aborted: true };
+    if (aborted) return { fullText, aborted: true };
     throw err;
   } finally {
     req.off('close', onClose);
@@ -541,19 +506,12 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     if (!user_text && !image_url) {
       return res.status(400).json({ error: 'Either user_text or image_url must be provided.' });
     }
-    const payload = {};
-    if (user_text) payload.user_text = user_text;
-    if (image_url) payload.image_url = await imageUrlToInline(image_url);
-
-    const response = await modelClient.post(QWEN_API_URL, payload, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    res.status(200).json(response.data);
+    const inlineImage = image_url ? await imageUrlToInline(image_url) : undefined;
+    const description = await generateOnce({ user_text, image_url: inlineImage });
+    res.status(200).json({ description });
   } catch (err) {
     console.error('Error in /api/generate:', err.message);
-    const status = err.response?.status || 500;
-    const errorData = err.response?.data || { error: 'Internal Server Error' };
-    res.status(status).json(errorData);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
