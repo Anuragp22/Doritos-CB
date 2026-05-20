@@ -48,6 +48,8 @@ model Document {
   user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   filename    String
   contentType String
+  status      String          @default("processing")
+  error       String?
   createdAt   DateTime        @default(now())
   chunks      DocumentChunk[]
 
