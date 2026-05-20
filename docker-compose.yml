@@ -22,15 +22,20 @@ services:
       CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
       DATABASE_URL: postgresql://${POSTGRES_USER:-doritos}:${POSTGRES_PASSWORD:-doritos}@postgres:5432/${POSTGRES_DB:-doritos}?schema=public
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set it in .env}
-      QWEN_API_URL: ${QWEN_API_URL:-http://host.docker.internal:5000/generate}
-      EMBED_API_URL: ${EMBED_API_URL:-http://host.docker.internal:5000/embed}
-      RERANK_API_URL: ${RERANK_API_URL:-http://host.docker.internal:5000/rerank}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      GEN_MODEL: ${GEN_MODEL:-qwen3.5:2b}
+      EMBED_API_URL: ${EMBED_API_URL:-http://model:5000/embed}
+      RERANK_API_URL: ${RERANK_API_URL:-http://model:5000/rerank}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
       NODE_ENV: ${NODE_ENV:-production}
     ports:
       - "3000:3000"
     depends_on:
       postgres:
+        condition: service_healthy
+      model:
+        condition: service_started
+      ollama:
         condition: service_healthy
     volumes:
       - backend_uploads:/app/uploads
@@ -45,21 +50,46 @@ services:
     depends_on:
       - backend
 
-  # The model service requires an NVIDIA GPU. Uncomment the deploy block
-  # below and ensure the NVIDIA Container Toolkit is installed on the host
-  # before running this service. On CPU-only hosts the 2B model will run
-  # but will be very slow and may exhaust memory.
+  # Local generation runtime. Serves the multimodal chat model on CPU.
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  # One-shot: pulls GEN_MODEL into the ollama service on startup. Falls back to
+  # `ollama show` so an offline restart (model already cached) still exits 0.
+  ollama-pull:
+    image: ollama/ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint:
+      - /bin/sh
+      - -c
+      - ollama pull "${GEN_MODEL:-qwen3.5:2b}" || ollama show "${GEN_MODEL:-qwen3.5:2b}"
+    restart: "no"
+
+  # Embeddings + reranking on CPU. server.py runs with ENABLE_GENERATION=false
+  # so it skips the VLM and only serves /embed and /rerank.
   model:
     build: ./MODEL
     environment:
       HOST: 0.0.0.0
       PORT: 5000
       MODEL_ID: ${MODEL_ID:-Qwen/Qwen2-VL-2B-Instruct}
+      ENABLE_GENERATION: "false"
       HF_HOME: /root/.cache/huggingface
     ports:
       - "5000:5000"
-    profiles:
-      - model
     volumes:
       - huggingface_cache:/root/.cache/huggingface
       - model_checkpoints:/app/checkpoints
@@ -101,3 +131,4 @@ volumes:
   backend_uploads:
   huggingface_cache:
   model_checkpoints:
+  ollama_data:
