@@ -10,14 +10,13 @@ import cookieParser from 'cookie-parser';
 
 import prisma from './lib/prisma.js';
 import { requireAuth, signToken, cookieOptions } from './middleware/auth.js';
-import { chunkText } from './lib/chunk.js';
-import { embed } from './lib/embed.js';
-import { extractText } from './lib/extract.js';
 import { pruneHistory } from './lib/history.js';
 import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 import { streamChat, generateOnce } from './lib/ollama.js';
+import { enqueueIngest } from './lib/ingest.js';
 
 const port = process.env.PORT || 3000;
+const MAX_UPLOAD_MB = 500;
 
 if (!process.env.JWT_SECRET) {
   console.error('Missing JWT_SECRET in environment.');
@@ -61,9 +60,16 @@ const upload = multer({ storage });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Document uploads stream to a temp dir on disk (not held in RAM) and are
+// deleted once the background ingest job finishes with them.
+const TMP_DIR = path.join(__dirname, 'tmp');
 const docUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, TMP_DIR),
+    filename: (req, file, cb) =>
+      cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
+  }),
+  limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 },
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────
@@ -144,46 +150,34 @@ app.post('/upload', requireAuth, upload.single('file'), (req, res) => {
 app.post('/api/documents', requireAuth, docUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  let text;
-  try {
-    text = await extractText(req.file);
-  } catch (err) {
-    return res.status(415).json({ error: err.message });
-  }
-
-  const chunks = chunkText(text);
-  if (chunks.length === 0) {
-    return res.status(400).json({ error: 'File contained no extractable text' });
-  }
-
   try {
     const document = await prisma.document.create({
       data: {
         userId: req.userId,
         filename: req.file.originalname,
         contentType: req.file.mimetype || 'application/octet-stream',
+        status: 'processing',
       },
     });
 
-    const embeddings = await embed(chunks);
+    // Hand off to the background processor; do not await — the upload
+    // request returns immediately.
+    enqueueIngest({
+      documentId: document.id,
+      filePath: req.file.path,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+    });
 
-    for (let i = 0; i < chunks.length; i++) {
-      const id = randomUUID();
-      const vec = `[${embeddings[i].join(',')}]`;
-      await prisma.$executeRaw`
-        INSERT INTO "DocumentChunk" (id, "documentId", "chunkIndex", text, embedding)
-        VALUES (${id}, ${document.id}, ${i}, ${chunks[i]}, ${vec}::vector)
-      `;
-    }
-
-    res.status(201).json({
+    res.status(202).json({
       id: document.id,
-      filename: req.file.originalname,
-      chunks: chunks.length,
+      filename: document.filename,
+      status: 'processing',
     });
   } catch (err) {
-    console.error('Document ingest error:', err.message);
-    res.status(500).json({ error: 'Failed to ingest document' });
+    console.error('Document upload error:', err.message);
+    await fs.unlink(req.file.path).catch(() => {});
+    res.status(500).json({ error: 'Failed to accept document' });
   }
 });
 
@@ -195,6 +189,8 @@ app.get('/api/documents', requireAuth, async (req, res) => {
         id: true,
         filename: true,
         contentType: true,
+        status: true,
+        error: true,
         createdAt: true,
         _count: { select: { chunks: true } },
       },
@@ -205,6 +201,8 @@ app.get('/api/documents', requireAuth, async (req, res) => {
         id: d.id,
         filename: d.filename,
         contentType: d.contentType,
+        status: d.status,
+        error: d.error,
         createdAt: d.createdAt,
         chunkCount: d._count.chunks,
       }))
@@ -518,6 +516,11 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 // ─── Error handler ────────────────────────────────────────────────────
 
 app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+    return res
+      .status(413)
+      .json({ error: `File exceeds the ${MAX_UPLOAD_MB} MB limit` });
+  }
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
 });
@@ -530,6 +533,23 @@ const start = async () => {
     console.error('Database connection failed:', error.message);
     process.exit(1);
   }
+
+  await fs.mkdir(TMP_DIR, { recursive: true });
+
+  // A document left mid-ingest by a crash/restart cannot resume — surface it
+  // as failed so the user can re-upload, rather than leaving it stuck.
+  try {
+    const recovered = await prisma.document.updateMany({
+      where: { status: 'processing' },
+      data: { status: 'failed', error: 'Processing interrupted by a server restart.' },
+    });
+    if (recovered.count > 0) {
+      console.log(`Recovered ${recovered.count} interrupted document(s).`);
+    }
+  } catch (err) {
+    console.error('Startup recovery failed:', err.message);
+  }
+
   app.listen(port, () => console.log(`Server running on ${port}`));
 };
 
