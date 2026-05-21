@@ -12,64 +12,90 @@ gradio share tunnels. Everything is wired up to communicate over `localhost`
 ## Architecture
 
 ```
-        +----------------+        +------------------+
-Browser | CLIENT (Vite + |  fetch | BACKEND (Express)|
-  ----> | React, port    |  ----> | port 3000        |
-        | 5173 dev /     |        | JWT cookie auth  |
-        | 80 prod nginx) |        | Prisma ORM       |
-        +----------------+        +---------+--------+
-                                            |
-                            +---------------+----------+
-                            |                          |
-                +-----------v---------+    +-----------v---------+
-                | Postgres (5440)     |    | MODEL (port 5000)   |
-                | Prisma migrations:  |    | FastAPI + Qwen2-VL  |
-                | User, Chat, Message |    | inference server    |
-                +---------------------+    +---------------------+
+                 Browser
+                    |
+                    v
+        +-------------------+   /api    +------------------------+
+        | CLIENT            | --------> | BACKEND (Express)      |
+        | React SPA + nginx | <-------- | port 3000              |
+        | host port 5173    |    SSE    | JWT auth, Prisma ORM   |
+        +-------------------+           +-----------+------------+
+                                                    |
+              +------------------+------------------+------------------+
+              |                  |                  |                  |
+       +------v-------+  +--------v-------+  +-------v------+  +--------v-------+
+       | postgres     |  | model          |  | ollama       |  | Groq (cloud)   |
+       | pgvector+FTS |  | embed + rerank |  | qwen3.5:2b   |  | agentic mode   |
+       | host 5440    |  | host 5000, CPU |  | host 11434   |  | optional       |
+       +--------------+  +----------------+  +--------------+  +----------------+
 ```
 
-| Service | Tech | Container port | Host port |
-|---------|------|----------------|-----------|
-| `client` | React 19 + Vite + Tanstack Query | 5173 (dev) / 80 (prod nginx) | 5173 |
-| `backend` | Express + Prisma + bcrypt + JWT | 3000 | 3000 |
-| `postgres` | postgres:16-alpine | 5432 | **5440** |
-| `model` | FastAPI + transformers + Qwen2-VL | 5000 | 5000 |
+| Service | Image / build context | Container port | Host port |
+|---------|-----------------------|----------------|-----------|
+| `client` | `./CLIENT` — React 19 + Vite, nginx in prod | 80 | 5173 |
+| `backend` | `./BACKEND` — Express + Prisma + JWT | 3000 | 3000 |
+| `postgres` | `pgvector/pgvector:pg16` | 5432 | **5440** |
+| `model` | `./MODEL` — FastAPI, CPU embeddings + reranking | 5000 | 5000 |
+| `ollama` | `ollama/ollama` — offline-mode text generation | 11434 | 11434 |
+| `ollama-pull` | `ollama/ollama` — one-shot model pull, then exits | — | — |
+| `trainer` | `./MODEL` — LLaMA-Factory fine-tuning UI | 7860 | 7860 |
 
-The `model` service is gated behind a Compose profile because it needs an
-NVIDIA GPU to be useful in practice. See [`MODEL/README.md`](MODEL/README.md)
-for setup.
+`docker compose up` starts every service the app needs — including `model`,
+which runs embeddings and reranking on **CPU**. Only `trainer`, the optional
+LLaMA-Factory fine-tuning UI, is gated behind the `model` Compose profile.
+See [`MODEL/README.md`](MODEL/README.md) for model details.
 
 ## Quick start
 
 ### Prerequisites
 
 - Docker Desktop with Compose v2
-- (Optional, for the `model` service) NVIDIA GPU + NVIDIA Container Toolkit
+- ~6 GB free disk (images + the Ollama and embedding model downloads)
+- No GPU needed — the whole default stack runs on CPU
 
-### Run the production-style stack
+### Run the full stack
 
 ```powershell
-# 1) create the root .env (gitignored) — at minimum supply JWT_SECRET
+# 1) create the root .env (gitignored)
 copy .env.example .env
+
+# 2) generate a JWT secret and paste the value into JWT_SECRET in .env
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-# paste the value into JWT_SECRET in .env
 
-# 2) bring everything up
+# 3) (optional) for agentic chat mode, set GROQ_API_KEY in .env
+#    free key at https://console.groq.com
+
+# 4) build and start everything
 docker compose up --build
-
-# 3) (optional) start the inference server too — needs a GPU
-docker compose --profile model up --build
 ```
+
+`docker compose up --build` is the only command you need — it starts
+`postgres`, `backend`, `client`, `model`, `ollama`, and the one-shot
+`ollama-pull`. On the **first run**, `ollama-pull` downloads the generation
+model (`qwen3.5:2b`) and `model` downloads the embedding/rerank models, so
+allow a few minutes before the app is ready; later runs reuse the caches.
 
 Then visit:
 
 - App: <http://localhost:5173>
 - API: <http://localhost:3000>
 - Postgres: `localhost:5440` (user `doritos`, db `doritos`, password from `.env`)
-- Inference server: <http://localhost:5000>
+- Embedding + rerank service: <http://localhost:5000>
+- Ollama: <http://localhost:11434>
 
-The backend container runs `prisma migrate deploy` on startup, so the schema
-is applied to the freshly created Postgres before the server starts listening.
+The backend container runs `prisma generate` and `prisma migrate deploy` on
+startup — after Postgres reports healthy — so the schema is applied before
+the API starts listening.
+
+### Everyday commands
+
+```powershell
+docker compose up --build -d        # start in the background
+docker compose logs -f backend      # follow one service's logs
+docker compose ps                   # show service status
+docker compose down                 # stop everything (data volumes kept)
+docker compose down -v              # stop and wipe all data + model caches
+```
 
 ### Run the dev stack with hot reload
 
@@ -77,9 +103,20 @@ is applied to the freshly created Postgres before the server starts listening.
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-This override mounts `./BACKEND` and `./CLIENT` into their containers, runs
-the backend under `nodemon`, and serves the client through `vite dev`. Edits
-on the host reload immediately.
+This override mounts `./BACKEND`, `./CLIENT`, and `./MODEL` into their
+containers, runs the backend under `nodemon`, serves the client through
+`vite dev` on port 5173, and runs `model` under uvicorn `--reload`. Edits on
+the host reload immediately.
+
+### Optional: fine-tuning UI
+
+```powershell
+docker compose --profile model up --build trainer
+```
+
+Starts the LLaMA-Factory web UI on <http://localhost:7860>. It is dormant by
+default and most useful with an NVIDIA GPU — the GPU reservation is commented
+out in `docker-compose.yml`.
 
 ### Running services on the host (no Docker)
 
