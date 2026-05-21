@@ -536,15 +536,21 @@ const start = async () => {
 
   await fs.mkdir(TMP_DIR, { recursive: true });
 
-  // A document left mid-ingest by a crash/restart cannot resume — surface it
-  // as failed so the user can re-upload, rather than leaving it stuck.
+  // A document left mid-ingest by a crash/restart cannot resume — its in-memory
+  // job is gone. Drop any partial chunks it wrote and mark it failed, so the
+  // user can re-upload rather than it being stuck on "processing".
   try {
-    const recovered = await prisma.document.updateMany({
+    await prisma.documentChunk.deleteMany({
+      where: { document: { status: 'processing' } },
+    });
+    const interrupted = await prisma.document.updateMany({
       where: { status: 'processing' },
       data: { status: 'failed', error: 'Processing interrupted by a server restart.' },
     });
-    if (recovered.count > 0) {
-      console.log(`Recovered ${recovered.count} interrupted document(s).`);
+    if (interrupted.count > 0) {
+      console.log(
+        `Marked ${interrupted.count} interrupted document(s) as failed — re-upload to retry.`
+      );
     }
   } catch (err) {
     console.error('Startup recovery failed:', err.message);

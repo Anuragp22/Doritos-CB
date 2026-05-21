@@ -20,7 +20,7 @@ export async function hybridRetrieve(query, userId, topK = TOP_K) {
              ROW_NUMBER() OVER (ORDER BY c.embedding <=> ${vectorLiteral}::vector) AS r
       FROM "DocumentChunk" c
       JOIN "Document" d ON d.id = c."documentId"
-      WHERE d."userId" = ${userId} AND c.embedding IS NOT NULL
+      WHERE d."userId" = ${userId} AND d."status" = 'ready' AND c.embedding IS NOT NULL
       ORDER BY c.embedding <=> ${vectorLiteral}::vector
       LIMIT ${VECTOR_CANDIDATES}
     ),
@@ -32,6 +32,7 @@ export async function hybridRetrieve(query, userId, topK = TOP_K) {
       FROM "DocumentChunk" c
       JOIN "Document" d ON d.id = c."documentId"
       WHERE d."userId" = ${userId}
+        AND d."status" = 'ready'
         AND c.tsv @@ plainto_tsquery('english', ${query})
       ORDER BY ts_rank_cd(c.tsv, plainto_tsquery('english', ${query})) DESC
       LIMIT ${FTS_CANDIDATES}
