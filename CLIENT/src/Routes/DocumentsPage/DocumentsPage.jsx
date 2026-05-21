@@ -23,6 +23,9 @@ const DocumentsPage = () => {
     queryKey: ['documents'],
     queryFn: () =>
       fetch(`${API}/api/documents`, { credentials: 'include' }).then((r) => r.json()),
+    // Poll while any document is still processing, then stop.
+    refetchInterval: (query) =>
+      query.state.data?.some((d) => d.status === 'processing') ? 4000 : false,
   });
 
   const upload = useMutation({
@@ -38,8 +41,8 @@ const DocumentsPage = () => {
       if (!res.ok) throw new Error(body.error || 'Upload failed');
       return body;
     },
-    onSuccess: (body) => {
-      toast.success(`Indexed ${body.chunkCount ?? ''} chunks`.trim());
+    onSuccess: () => {
+      toast.success('Upload received — processing in the background…');
       queryClient.invalidateQueries({ queryKey: ['documents'] });
     },
     onError: (err) => toast.error(err.message),
@@ -118,7 +121,7 @@ const DocumentsPage = () => {
               {upload.isPending ? (
                 <>
                   <Loader2 className="size-5 animate-spin" />
-                  Uploading & indexing…
+                  Uploading…
                 </>
               ) : (
                 <>
@@ -161,10 +164,21 @@ const DocumentsPage = () => {
                     <span className="truncate text-sm font-medium">
                       {doc.filename}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      {doc.chunkCount} chunks ·{' '}
-                      {new Date(doc.createdAt).toLocaleDateString()}
-                    </span>
+                    {doc.status === 'processing' ? (
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="size-3 animate-spin" />
+                        Processing…
+                      </span>
+                    ) : doc.status === 'failed' ? (
+                      <span className="truncate text-xs text-destructive">
+                        Failed — {doc.error || 'processing error'}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {doc.chunkCount} chunks ·{' '}
+                        {new Date(doc.createdAt).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Button
@@ -172,7 +186,7 @@ const DocumentsPage = () => {
                   size="sm"
                   variant="ghost"
                   onClick={() => remove.mutate(doc.id)}
-                  disabled={remove.isPending}
+                  disabled={remove.isPending || doc.status === 'processing'}
                   className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 className="size-4" />
