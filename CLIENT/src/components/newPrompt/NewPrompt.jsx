@@ -5,6 +5,7 @@ import Upload from '@/components/upload/upload';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
 import { readSSEStream } from '@/lib/stream';
+import { useChatMode, ModeToggle, AgentSteps, applyStepEvent } from '@/components/agentic';
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -14,6 +15,8 @@ export function useNewPrompt({ data }) {
   const [sources, setSources] = useState(null);
   const [error, setError] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [steps, setSteps] = useState([]);
+  const [mode, setMode] = useChatMode();
   const [img, setImg] = useState({ isLoading: false, error: '', dbData: {}, aiData: {} });
 
   const formRef = useRef(null);
@@ -30,6 +33,7 @@ export function useNewPrompt({ data }) {
     setAnswer('');
     setSources(null);
     setError('');
+    setSteps([]);
     setIsStreaming(true);
 
     try {
@@ -40,6 +44,7 @@ export function useNewPrompt({ data }) {
         body: JSON.stringify({
           question: text,
           img: img.dbData?.filePath || undefined,
+          mode,
         }),
         signal: controllerRef.current.signal,
       });
@@ -47,6 +52,7 @@ export function useNewPrompt({ data }) {
       await readSSEStream(res, (event) => {
         if (event.text) setAnswer((prev) => prev + event.text);
         else if (event.sources) setSources(event.sources);
+        else if (event.step) setSteps((prev) => applyStepEvent(prev, event.step));
         else if (event.error) setError(event.error);
       });
 
@@ -55,6 +61,7 @@ export function useNewPrompt({ data }) {
       setQuestion('');
       setAnswer('');
       setSources(null);
+      setSteps([]);
       setImg({ isLoading: false, error: '', dbData: {}, aiData: {} });
     } catch (err) {
       if (err.name !== 'AbortError') setError(err.message);
@@ -91,6 +98,7 @@ export function useNewPrompt({ data }) {
       )}
       {(answer || isStreaming) && (
         <div className="dispatch-turn--assistant">
+          <AgentSteps steps={steps} />
           {answer ? (
             <>
               <MarkdownMessage className="dispatch-body">{answer}</MarkdownMessage>
@@ -115,6 +123,7 @@ export function useNewPrompt({ data }) {
         autoComplete="off"
       />
       <div className="dispatch-composer__actions">
+        <ModeToggle mode={mode} setMode={setMode} disabled={isStreaming} />
         <span className="dispatch-composer__upload">
           <Upload setImg={setImg} />
         </span>

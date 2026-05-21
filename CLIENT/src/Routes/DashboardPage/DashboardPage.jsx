@@ -5,6 +5,7 @@ import { ArrowUp, Code2, Image as ImageIcon, MessageSquare, Square } from 'lucid
 import { readSSEStream } from '@/lib/stream';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
+import { useChatMode, ModeToggle, AgentSteps, applyStepEvent } from '@/components/agentic';
 import '@/Routes/ChatPage/chatPage.css';
 
 const API = import.meta.env.VITE_API_URL;
@@ -24,6 +25,8 @@ const DashboardPage = () => {
   const [streamingSources, setStreamingSources] = useState(null);
   const [error, setError] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [steps, setSteps] = useState([]);
+  const [mode, setMode] = useChatMode();
 
   const controllerRef = useRef(null);
   useEffect(() => () => controllerRef.current?.abort(), []);
@@ -40,6 +43,7 @@ const DashboardPage = () => {
     setStreamingAnswer('');
     setStreamingSources(null);
     setError('');
+    setSteps([]);
     setIsStreaming(true);
 
     let chatId = null;
@@ -48,7 +52,7 @@ const DashboardPage = () => {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, mode }),
         signal: controllerRef.current.signal,
       });
 
@@ -56,6 +60,7 @@ const DashboardPage = () => {
         if (event.chatId) chatId = event.chatId;
         else if (event.text) setStreamingAnswer((prev) => prev + event.text);
         else if (event.sources) setStreamingSources(event.sources);
+        else if (event.step) setSteps((prev) => applyStepEvent(prev, event.step));
         else if (event.error) setError(event.error);
       });
 
@@ -82,6 +87,7 @@ const DashboardPage = () => {
                 <div className="dispatch-query">{submittedText}</div>
               </div>
               <div className="dispatch-turn--assistant">
+                <AgentSteps steps={steps} />
                 {streamingAnswer ? (
                   <>
                     <MarkdownMessage className="dispatch-body">{streamingAnswer}</MarkdownMessage>
@@ -119,6 +125,7 @@ const DashboardPage = () => {
             autoComplete="off"
           />
           <div className="dispatch-composer__actions">
+            <ModeToggle mode={mode} setMode={setMode} disabled={isStreaming} />
             {isStreaming ? (
               <button
                 type="button"
