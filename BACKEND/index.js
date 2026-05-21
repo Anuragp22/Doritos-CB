@@ -168,6 +168,7 @@ app.post('/api/documents', requireAuth, docUpload.single('file'), async (req, re
       filePath: req.file.path,
       originalname: req.file.originalname,
       mimetype: req.file.mimetype,
+      userId: req.userId,
     });
 
     res.status(202).json({

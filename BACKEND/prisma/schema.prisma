@@ -50,10 +50,12 @@ model Document {
   contentType String
   status      String          @default("processing")
   error       String?
+  contentHash String?
   createdAt   DateTime        @default(now())
   chunks      DocumentChunk[]
 
   @@index([userId])
+  @@index([userId, contentHash])
 }
 
 model DocumentChunk {
@@ -66,6 +68,7 @@ model DocumentChunk {
   tsv        Unsupported("tsvector")?
   createdAt  DateTime                     @default(now())
 
+  @@unique([documentId, chunkIndex])
   @@index([documentId])
 }
 
