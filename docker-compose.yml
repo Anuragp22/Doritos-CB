@@ -24,6 +24,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set it in .env}
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       GEN_MODEL: ${GEN_MODEL:-qwen3.5:2b}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      AGENT_MODEL: ${AGENT_MODEL:-qwen/qwen3-32b}
       EMBED_API_URL: ${EMBED_API_URL:-http://model:5000/embed}
       RERANK_API_URL: ${RERANK_API_URL:-http://model:5000/rerank}
       MODEL_API_KEY: ${MODEL_API_KEY:-}

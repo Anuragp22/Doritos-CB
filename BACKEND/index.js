@@ -13,6 +13,7 @@ import { requireAuth, signToken, cookieOptions } from './middleware/auth.js';
 import { pruneHistory } from './lib/history.js';
 import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 import { streamChat, generateOnce } from './lib/ollama.js';
+import { streamAgent } from './lib/agent.js';
 import { enqueueIngest } from './lib/ingest.js';
 
 const port = process.env.PORT || 3000;
@@ -338,6 +339,47 @@ async function streamFromModel(res, messages, req) {
   }
 }
 
+// Agentic mode: consume the LangGraph agent stream, mapping its normalized
+// events (step / sources / text) to SSE. Returns the assembled answer +
+// the sources the agent's search tool retrieved.
+async function streamFromAgent(res, messages, req, userId) {
+  const controller = new AbortController();
+  let aborted = false;
+  let fullText = '';
+  let sources = null;
+
+  const onClose = () => {
+    if (!aborted) {
+      aborted = true;
+      controller.abort();
+    }
+  };
+  req.on('close', onClose);
+
+  try {
+    for await (const ev of streamAgent(messages, { userId, signal: controller.signal })) {
+      if (aborted) break;
+      if (ev.kind === 'text') {
+        fullText += ev.text;
+        sendSSE(res, { text: ev.text });
+      } else if (ev.kind === 'thinking') {
+        sendSSE(res, { thinking: ev.text });
+      } else if (ev.kind === 'step') {
+        sendSSE(res, { step: { tool: ev.tool, phase: ev.phase, query: ev.query } });
+      } else if (ev.kind === 'sources') {
+        sources = toSourcesPayload(ev.chunks);
+        if (sources) sendSSE(res, { sources });
+      }
+    }
+    return { fullText, aborted, sources };
+  } catch (err) {
+    if (aborted) return { fullText, aborted: true, sources };
+    throw err;
+  } finally {
+    req.off('close', onClose);
+  }
+}
+
 function toSourcesPayload(retrievedChunks) {
   if (!retrievedChunks?.length) return null;
   return retrievedChunks.map((c, i) => ({
@@ -363,11 +405,10 @@ async function persistAssistantMessage(chatId, text, sources) {
 // ─── Chats ────────────────────────────────────────────────────────────
 
 app.post('/api/chats', requireAuth, async (req, res) => {
-  const { text } = req.body;
+  const { text, mode } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
+  const agentic = mode === 'agentic';
 
-  // Kick off chat creation and retrieval concurrently. Client gets the
-  // chatId as soon as the DB returns; retrieval keeps running in parallel.
   const chatPromise = prisma.chat.create({
     data: {
       userId: req.userId,
@@ -376,7 +417,8 @@ app.post('/api/chats', requireAuth, async (req, res) => {
     },
     select: { id: true },
   });
-  const retrievedPromise = retrieveContext(text, req.userId);
+  // Offline mode retrieves upfront; the agent retrieves via its own tool.
+  const retrievedPromise = agentic ? null : retrieveContext(text, req.userId);
 
   let chat;
   try {
@@ -390,18 +432,22 @@ app.post('/api/chats', requireAuth, async (req, res) => {
   sendSSE(res, { chatId: chat.id });
 
   try {
-    const retrieved = await retrievedPromise;
-    const sources = toSourcesPayload(retrieved);
-    if (sources) sendSSE(res, { sources });
+    let result;
+    if (agentic) {
+      const userTurn = await buildUserTurn({ augmentedText: text });
+      result = await streamFromAgent(res, [userTurn], req, req.userId);
+      await persistAssistantMessage(chat.id, result.fullText, result.sources);
+    } else {
+      const retrieved = await retrievedPromise;
+      const sources = toSourcesPayload(retrieved);
+      if (sources) sendSSE(res, { sources });
+      const augmented = buildAugmentedPrompt(text, retrieved);
+      const userTurn = await buildUserTurn({ augmentedText: augmented });
+      result = await streamFromModel(res, [userTurn], req);
+      await persistAssistantMessage(chat.id, result.fullText, sources);
+    }
 
-    const augmented = buildAugmentedPrompt(text, retrieved);
-
-    const userTurn = await buildUserTurn({ augmentedText: augmented });
-    const { fullText, aborted } = await streamFromModel(res, [userTurn], req);
-
-    await persistAssistantMessage(chat.id, fullText, sources);
-
-    if (!aborted) {
+    if (!result.aborted) {
       sendSSE(res, { done: true });
       res.end();
     }
@@ -443,8 +489,9 @@ app.get('/api/chats/:id', requireAuth, async (req, res) => {
 });
 
 app.put('/api/chats/:id', requireAuth, async (req, res) => {
-  const { question, img } = req.body;
+  const { question, img, mode } = req.body;
   if (!question) return res.status(400).json({ error: 'question required' });
+  const agentic = mode === 'agentic';
 
   const chat = await prisma.chat.findFirst({
     where: { id: req.params.id, userId: req.userId },
@@ -467,25 +514,28 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
   const savePromise = prisma.message.create({
     data: { chatId: chat.id, role: 'user', text: question, imageUrl: img || null },
   });
-  const retrievedPromise = retrieveContext(question, req.userId);
+  const retrievedPromise = agentic ? null : retrieveContext(question, req.userId);
 
   setupSSE(res);
 
   try {
-    const [, retrieved] = await Promise.all([savePromise, retrievedPromise]);
-    const sources = toSourcesPayload(retrieved);
-    if (sources) sendSSE(res, { sources });
+    let result;
+    if (agentic) {
+      await savePromise;
+      history.push(await buildUserTurn({ augmentedText: question, imageUrl: img || null }));
+      result = await streamFromAgent(res, pruneHistory(history), req, req.userId);
+      await persistAssistantMessage(chat.id, result.fullText, result.sources);
+    } else {
+      const [, retrieved] = await Promise.all([savePromise, retrievedPromise]);
+      const sources = toSourcesPayload(retrieved);
+      if (sources) sendSSE(res, { sources });
+      const augmented = buildAugmentedPrompt(question, retrieved);
+      history.push(await buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
+      result = await streamFromModel(res, pruneHistory(history), req);
+      await persistAssistantMessage(chat.id, result.fullText, sources);
+    }
 
-    const augmented = buildAugmentedPrompt(question, retrieved);
-
-    history.push(await buildUserTurn({ augmentedText: augmented, imageUrl: img || null }));
-    const pruned = pruneHistory(history);
-
-    const { fullText, aborted } = await streamFromModel(res, pruned, req);
-
-    await persistAssistantMessage(chat.id, fullText, sources);
-
-    if (!aborted) {
+    if (!result.aborted) {
       sendSSE(res, { done: true });
       res.end();
     }
