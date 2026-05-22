@@ -6,10 +6,16 @@ import { Check, Loader2 } from 'lucide-react';
 
 const MODE_KEY = 'doritos-chat-mode';
 
+// Offline mode runs generation on a local Ollama server. A deployment without
+// one (the hosted demo) sets VITE_OFFLINE_MODE=false at build time, which
+// locks the app to agentic mode and hides the toggle. Unset = both modes on.
+const OFFLINE_ENABLED = import.meta.env.VITE_OFFLINE_MODE !== 'false';
+
 // Chat mode persisted in localStorage so it carries across the dashboard
 // composer and the in-chat composer.
 export function useChatMode() {
   const [mode, setModeState] = useState(() => {
+    if (!OFFLINE_ENABLED) return 'agentic';
     try {
       return localStorage.getItem(MODE_KEY) === 'agentic' ? 'agentic' : 'offline';
     } catch {
@@ -17,6 +23,7 @@ export function useChatMode() {
     }
   });
   const setMode = (next) => {
+    if (!OFFLINE_ENABLED) return; // locked to agentic — no offline server
     setModeState(next);
     try {
       localStorage.setItem(MODE_KEY, next);
@@ -28,6 +35,7 @@ export function useChatMode() {
 }
 
 export function ModeToggle({ mode, setMode, disabled }) {
+  if (!OFFLINE_ENABLED) return null; // one mode only — nothing to toggle
   return (
     <div className="dispatch-mode" role="group" aria-label="Chat mode">
       <button
