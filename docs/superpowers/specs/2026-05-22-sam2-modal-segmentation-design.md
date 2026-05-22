@@ -140,7 +140,7 @@ Request:
 Response:
 ```json
 {
-  "mask_png": "<base64 PNG, single-channel, full original-image size>",
+  "mask_png": "<base64 RGBA PNG: accent color where selected, transparent elsewhere, full original-image size>",
   "bbox": [x0, y0, x1, y1],
   "score": 0.97
 }
