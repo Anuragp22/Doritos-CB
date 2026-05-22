@@ -46,17 +46,17 @@ const ChatPage = () => {
                 if (message.role === 'user') {
                   return (
                     <div key={message.id} className="dispatch-turn--user">
-                      <div className="dispatch-query">
-                        {message.imageUrl && (
-                          <img
-                            src={message.imageUrl}
-                            alt="Attachment"
-                            className="dispatch-query__image"
-                            loading="lazy"
-                          />
-                        )}
-                        {message.text}
-                      </div>
+                      {message.imageUrl && (
+                        <img
+                          src={message.imageUrl}
+                          alt="Attachment"
+                          className="dispatch-msg-image"
+                          loading="lazy"
+                        />
+                      )}
+                      {message.text && (
+                        <div className="dispatch-query">{message.text}</div>
+                      )}
                     </div>
                   );
                 }

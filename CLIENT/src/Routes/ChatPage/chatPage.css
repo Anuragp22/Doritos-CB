@@ -30,7 +30,9 @@
 /* ---- User message: bubble, right-aligned ---- */
 .dispatch-turn--user {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
 }
 .dispatch-query {
   max-width: 75%;
@@ -44,12 +46,12 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-.dispatch-query__image {
+/* Image in a message — a clean rounded standalone image, not boxed in a bubble */
+.dispatch-msg-image {
   display: block;
-  max-height: 18rem;
-  max-width: 100%;
-  margin-bottom: 0.6rem;
-  border-radius: 0.75rem;
+  max-width: 22rem;
+  max-height: 20rem;
+  border-radius: 0.9rem;
   border: 1px solid var(--rule);
 }
 

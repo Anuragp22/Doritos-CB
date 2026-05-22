@@ -113,17 +113,15 @@ export function useNewPrompt({ data }) {
     <>
       {(sentImage || question) && (
         <div className="dispatch-turn--user">
-          <div className="dispatch-query">
-            {sentImage && (
-              <img
-                src={sentImage}
-                alt="Attachment"
-                className="dispatch-query__image"
-                loading="lazy"
-              />
-            )}
-            {question}
-          </div>
+          {sentImage && (
+            <img
+              src={sentImage}
+              alt="Attachment"
+              className="dispatch-msg-image"
+              loading="lazy"
+            />
+          )}
+          {question && <div className="dispatch-query">{question}</div>}
         </div>
       )}
       {(answer || isStreaming) && (
