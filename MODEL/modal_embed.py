@@ -45,6 +45,7 @@ image = (
     .env({"ENABLE_GENERATION": "false"})
     .pip_install(
         "torch",
+        "torchvision",
         "transformers>=4.45",
         "sentence-transformers>=3.0",
         "qwen-vl-utils[decord]>=0.0.8",
