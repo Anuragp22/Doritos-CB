@@ -30,6 +30,8 @@ services:
       RERANK_API_URL: ${RERANK_API_URL:-http://model:5000/rerank}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
       SEGMENT_API_URL: ${SEGMENT_API_URL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       NODE_ENV: ${NODE_ENV:-production}
     ports:
       - "3000:3000"
