@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, Square } from 'lucide-react';
+import { ArrowUp, Square, Scissors, Undo2 } from 'lucide-react';
 import Upload from '@/components/upload/upload';
+import SegmentDialog from '@/components/segment/SegmentDialog';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
 import { readSSEStream } from '@/lib/stream';
@@ -18,12 +19,21 @@ export function useNewPrompt({ data }) {
   const [steps, setSteps] = useState([]);
   const [mode, setMode] = useChatMode();
   const [img, setImg] = useState({ isLoading: false, error: '', dbData: {}, aiData: {} });
+  const [segmentOpen, setSegmentOpen] = useState(false);
+  const [segmentEnabled, setSegmentEnabled] = useState(false);
 
   const formRef = useRef(null);
   const controllerRef = useRef(null);
   const queryClient = useQueryClient();
 
   useEffect(() => () => controllerRef.current?.abort(), []);
+
+  useEffect(() => {
+    fetch(`${API}/api/segment/status`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { enabled: false }))
+      .then((d) => setSegmentEnabled(Boolean(d.enabled)))
+      .catch(() => setSegmentEnabled(false));
+  }, []);
 
   const sendTurn = async (text) => {
     controllerRef.current?.abort();
@@ -84,12 +94,51 @@ export function useNewPrompt({ data }) {
       {img.isLoading && <div className="dispatch-thinking">Uploading image</div>}
       {img.dbData?.filePath && (
         <div className="dispatch-turn--user">
-          <img
-            src={img.dbData.filePath}
-            alt="Uploaded preview"
-            className="dispatch-pending-image"
-          />
+          <div className="dispatch-pending">
+            <img
+              src={img.dbData.filePath}
+              alt="Uploaded preview"
+              className="dispatch-pending-image"
+            />
+            {segmentEnabled && (
+              <div className="dispatch-pending-tools">
+                <button type="button" onClick={() => setSegmentOpen(true)}>
+                  <Scissors className="size-3.5" /> Select object
+                </button>
+                {img.dbData.originalPath &&
+                  img.dbData.filePath !== img.dbData.originalPath && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setImg((prev) => ({
+                          ...prev,
+                          dbData: {
+                            ...prev.dbData,
+                            filePath: prev.dbData.originalPath,
+                          },
+                        }))
+                      }
+                    >
+                      <Undo2 className="size-3.5" /> Revert
+                    </button>
+                  )}
+              </div>
+            )}
+          </div>
         </div>
+      )}
+      {img.dbData?.originalPath && (
+        <SegmentDialog
+          open={segmentOpen}
+          onOpenChange={setSegmentOpen}
+          imageUrl={img.dbData.originalPath}
+          onApply={(cutoutUrl) =>
+            setImg((prev) => ({
+              ...prev,
+              dbData: { ...prev.dbData, filePath: cutoutUrl },
+            }))
+          }
+        />
       )}
       {question && (
         <div className="dispatch-turn--user">

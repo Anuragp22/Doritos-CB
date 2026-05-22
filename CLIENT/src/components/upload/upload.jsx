@@ -37,7 +37,7 @@ const Upload = ({ setImg }) => {
       setImg((prev) => ({
         ...prev,
         isLoading: false,
-        dbData: { filePath: data.fileUrl },
+        dbData: { filePath: data.fileUrl, originalPath: data.fileUrl },
       }));
     } catch (err) {
       toast.error(err.message);

@@ -485,3 +485,31 @@
     transform: rotate(360deg);
   }
 }
+
+/* Image preview tools (SAM2 object selection) */
+.dispatch-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.dispatch-pending-tools {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.dispatch-pending-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.dispatch-pending-tools button:hover {
+  background: rgba(26, 34, 56, 0.06);
+  color: var(--ink);
+}
