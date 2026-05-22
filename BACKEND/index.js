@@ -14,6 +14,7 @@ import { pruneHistory } from './lib/history.js';
 import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 import { streamChat, generateOnce } from './lib/ollama.js';
 import { streamAgent } from './lib/agent.js';
+import { streamVisionAnswer } from './lib/gemini.js';
 import { enqueueIngest } from './lib/ingest.js';
 import { segmentEnabled, cutoutFilename, decodeBase64Png } from './lib/segment.js';
 
@@ -382,6 +383,34 @@ async function streamFromAgent(res, messages, req, userId) {
   }
 }
 
+// Image chat: stream a Gemini answer for a turn that carries an image.
+async function streamFromGemini(res, messages, req) {
+  const controller = new AbortController();
+  let aborted = false;
+  let fullText = '';
+
+  const onClose = () => {
+    if (!aborted) {
+      aborted = true;
+      controller.abort();
+    }
+  };
+  req.on('close', onClose);
+
+  try {
+    for await (const delta of streamVisionAnswer(messages, { signal: controller.signal })) {
+      fullText += delta;
+      if (!aborted) sendSSE(res, { text: delta });
+    }
+    return { fullText, aborted };
+  } catch (err) {
+    if (aborted) return { fullText, aborted: true };
+    throw err;
+  } finally {
+    req.off('close', onClose);
+  }
+}
+
 function toSourcesPayload(retrievedChunks) {
   if (!retrievedChunks?.length) return null;
   return retrievedChunks.map((c, i) => ({
@@ -516,13 +545,20 @@ app.put('/api/chats/:id', requireAuth, async (req, res) => {
   const savePromise = prisma.message.create({
     data: { chatId: chat.id, role: 'user', text: question, imageUrl: img || null },
   });
-  const retrievedPromise = agentic ? null : retrieveContext(question, req.userId);
+  const retrievedPromise = agentic || img ? null : retrieveContext(question, req.userId);
 
   setupSSE(res);
 
   try {
     let result;
-    if (agentic) {
+    if (img) {
+      // Image turns go to Gemini — a fast multimodal model. The Groq agent is
+      // text-only; the offline model is vision-capable but slow on CPU.
+      await savePromise;
+      history.push(await buildUserTurn({ augmentedText: question, imageUrl: img }));
+      result = await streamFromGemini(res, pruneHistory(history), req);
+      await persistAssistantMessage(chat.id, result.fullText, null);
+    } else if (agentic) {
       await savePromise;
       history.push(await buildUserTurn({ augmentedText: question, imageUrl: img || null }));
       result = await streamFromAgent(res, pruneHistory(history), req, req.userId);

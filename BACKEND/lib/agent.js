@@ -28,11 +28,12 @@ function toLangChainMessages(messages) {
     const parts = Array.isArray(m.content)
       ? m.content
       : [{ type: 'text', text: String(m.content ?? '') }];
-    const content = parts.map((p) =>
-      p.type === 'image'
-        ? { type: 'image', url: p.image }
-        : { type: 'text', text: p.text || '' }
-    );
+    // The agent model is text-only. Drop image blocks from history — Groq
+    // rejects non-text content for this model, and image turns are handled by
+    // the offline vision path, not the agent.
+    const content = parts
+      .filter((p) => p.type !== 'image')
+      .map((p) => ({ type: 'text', text: p.text || '' }));
     const role = m.role === 'model' ? 'assistant' : m.role;
     return role === 'assistant'
       ? new AIMessage({ content })
