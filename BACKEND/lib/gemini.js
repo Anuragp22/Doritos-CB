@@ -8,8 +8,8 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT =
   'You are the assistant for the Doritos AI workspace. The user has attached ' +
-  'an image. Answer their question about it clearly and concisely, describing ' +
-  'what you actually see.';
+  'an image. If they asked a question, answer it clearly and concisely; if ' +
+  'they did not ask anything, briefly describe what the image shows.';
 
 // Split a `data:<mime>;base64,<data>` URI into a Gemini inlineData part.
 function dataUriToPart(uri) {

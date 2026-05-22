@@ -229,13 +229,87 @@
   border: 1px solid var(--rule);
   border-radius: 1.25rem;
   padding: 0.5rem 0.6rem 0.5rem 1rem;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   box-shadow: 0 4px 12px rgba(26, 34, 56, 0.06),
               0 1px 3px rgba(26, 34, 56, 0.04);
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.dispatch-composer__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Attached-image chip inside the composer */
+.dispatch-attach {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dispatch-attach__thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--rule);
+  overflow: hidden;
+  background: var(--paper);
+}
+.dispatch-attach__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.dispatch-attach__thumb--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted);
+}
+.dispatch-attach__remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(26, 34, 56, 0.78);
+  color: var(--paper);
+  cursor: pointer;
+}
+.dispatch-attach__remove:hover {
+  background: var(--ink);
+}
+.dispatch-attach__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.dispatch-attach__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.dispatch-attach__actions button:hover {
+  background: rgba(26, 34, 56, 0.06);
+  color: var(--ink);
 }
 .dispatch-composer:focus-within {
   border-color: var(--ink-muted);

@@ -521,7 +521,10 @@ app.get('/api/chats/:id', requireAuth, async (req, res) => {
 
 app.put('/api/chats/:id', requireAuth, async (req, res) => {
   const { question, img, mode } = req.body;
-  if (!question) return res.status(400).json({ error: 'question required' });
+  // A turn needs text, an image, or both — an image alone is allowed.
+  if (!question && !img) {
+    return res.status(400).json({ error: 'question or image required' });
+  }
   const agentic = mode === 'agentic';
 
   const chat = await prisma.chat.findFirst({
