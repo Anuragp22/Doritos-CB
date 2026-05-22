@@ -73,16 +73,20 @@ export default function SegmentDialog({ open, onOpenChange, imageUrl, onApply })
     maskImgRef.current = null;
   }, [open, imageUrl]);
 
-  // Draw the mask + shapes onto the canvas (natural-pixel space).
+  // Draw the selection preview (natural-pixel space): scrim the whole image,
+  // then punch out the selected region so the chosen object shows through
+  // bright — a live preview of the cutout that will be sent.
   const draw = useCallback((liveBox) => {
     const canvas = canvasRef.current;
     if (!canvas || !natural) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (maskImgRef.current) {
-      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = 'rgba(244, 237, 225, 0.82)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalCompositeOperation = 'destination-out';
       ctx.drawImage(maskImgRef.current, 0, 0, canvas.width, canvas.height);
-      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
     paintShapes(ctx, natural, points, liveBox ?? box);
   }, [natural, points, box]);
@@ -144,7 +148,10 @@ export default function SegmentDialog({ open, onOpenChange, imageUrl, onApply })
     if (!drag || !natural) return;
     const dx = e.clientX - drag.startClient.x;
     const dy = e.clientY - drag.startClient.y;
-    if (Math.hypot(dx, dy) >= DRAG_THRESHOLD) drag.moved = true;
+    if (Math.hypot(dx, dy) >= DRAG_THRESHOLD && !drag.moved) {
+      drag.moved = true;
+      maskImgRef.current = null; // a fresh box drag — drop the previous mask
+    }
     if (drag.moved) {
       const rect = imgRef.current.getBoundingClientRect();
       const now = toNaturalPoint(e.clientX, e.clientY, rect, natural);
@@ -159,13 +166,27 @@ export default function SegmentDialog({ open, onOpenChange, imageUrl, onApply })
     const rect = imgRef.current.getBoundingClientRect();
     const end = toNaturalPoint(e.clientX, e.clientY, rect, natural);
     if (drag.moved) {
+      // A box is a self-contained prompt. Drop any earlier points — SAM2
+      // returns a broken, speckled mask when a box and stray points are sent
+      // together (verified: score collapses from ~0.95 to ~0.60).
       const nextBox = toBox(drag.startNatural, end);
       setBox(nextBox);
-      runPredict(points, nextBox);
+      setPoints([]);
+      runPredict([], nextBox);
     } else {
-      const nextPoints = [...points, { ...end, label: drag.shift ? 0 : 1 }];
+      // A point click is a point-mode prompt. Drop any box for the same reason.
+      // Clicking on an existing marker removes it — lets the user undo a click.
+      const unit = Math.max(natural.width, natural.height);
+      const hitIdx = points.findIndex(
+        (p) => Math.hypot(p.x - end.x, p.y - end.y) <= unit / 40
+      );
+      const nextPoints =
+        hitIdx === -1
+          ? [...points, { ...end, label: drag.shift ? 0 : 1 }]
+          : points.filter((_, i) => i !== hitIdx);
       setPoints(nextPoints);
-      runPredict(nextPoints, box);
+      setBox(null);
+      runPredict(nextPoints, null);
     }
   };
 
@@ -209,8 +230,8 @@ export default function SegmentDialog({ open, onOpenChange, imageUrl, onApply })
         <DialogHeader>
           <DialogTitle>Select an object</DialogTitle>
           <DialogDescription>
-            Click the object to select it, or drag a box around it.
-            Shift-click to exclude a region.
+            Click an object to select it, or drag a box around it.
+            Click a dot again to remove it; Reset clears everything.
           </DialogDescription>
         </DialogHeader>
 
