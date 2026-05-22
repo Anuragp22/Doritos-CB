@@ -147,6 +147,25 @@ pip install -r requirements.txt
 python server.py
 ```
 
+### Optional: object segmentation (SAM2)
+
+Attaching an image and selecting just one object to send to the model uses
+**SAM2** running on a Modal GPU. It is optional — with `SEGMENT_API_URL` blank
+the app runs normally and the "Select object" button stays hidden.
+
+```powershell
+pip install modal
+modal token new
+# one-time, if not already created:
+modal secret create doritos-model-auth MODEL_API_KEY=<random-key>
+
+modal deploy MODEL/modal_segment.py
+```
+
+Paste the URL `modal deploy` prints into `SEGMENT_API_URL` in `.env`, and set
+the same `MODEL_API_KEY` there. The GPU is a T4 (~$0.59/hr) that scales to zero
+when idle, so it costs roughly nothing between sessions.
+
 ## Project layout
 
 ```
