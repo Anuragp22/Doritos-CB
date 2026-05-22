@@ -1,13 +1,17 @@
 # Doritos AI
 
-A local, multimodal chat assistant built around the Qwen2-VL vision-language
-model. Users sign in with email and password, send text and image prompts,
-and get model-generated descriptions back. Conversation history is stored in
-PostgreSQL; uploaded images are served directly from the backend.
+A multimodal RAG chat assistant. Users sign in with email and password, upload
+documents and images, and chat in one of two modes: **offline**, where
+generation runs on a local Ollama model and answers are grounded in retrieved
+document chunks, or **agentic**, where a LangGraph agent on Groq decides for
+itself when to search the corpus. Conversation history and document embeddings
+live in PostgreSQL (pgvector); uploaded images are served from the backend.
 
-The whole stack runs offline — no Clerk, no MinIO/S3, no Gemini, no ngrok or
-gradio share tunnels. Everything is wired up to communicate over `localhost`
-(or via Docker's internal network).
+The default stack runs fully offline — no Clerk, no MinIO/S3, no ngrok or
+gradio tunnels — communicating over `localhost` (or Docker's internal
+network). Three optional cloud integrations layer on top when you supply API
+keys: **agentic mode** (Groq), **image chat** (Gemini answers any turn with an
+attached image), and **object segmentation** (SAM2 on a Modal GPU).
 
 ## Architecture
 
@@ -23,11 +27,11 @@ gradio share tunnels. Everything is wired up to communicate over `localhost`
                                                     |
               +------------------+------------------+------------------+
               |                  |                  |                  |
-       +------v-------+  +--------v-------+  +-------v------+  +--------v-------+
-       | postgres     |  | model          |  | ollama       |  | Groq (cloud)   |
-       | pgvector+FTS |  | embed + rerank |  | qwen3.5:2b   |  | agentic mode   |
-       | host 5440    |  | host 5000, CPU |  | host 11434   |  | optional       |
-       +--------------+  +----------------+  +--------------+  +----------------+
+       +------v-------+  +--------v-------+  +-------v------+  +--------v---------+
+       | postgres     |  | model          |  | ollama       |  | cloud (optional) |
+       | pgvector+FTS |  | embed + rerank |  | qwen3.5:2b   |  | Groq, Gemini     |
+       | host 5440    |  | host 5000, CPU |  | host 11434   |  | Modal SAM2 GPU   |
+       +--------------+  +----------------+  +--------------+  +------------------+
 ```
 
 | Service | Image / build context | Container port | Host port |
@@ -185,8 +189,9 @@ when idle, so it costs roughly nothing between sessions.
 │   ├── src/layouts/      rootLayout, dashboardLayout
 │   ├── nginx.conf        SPA fallback for the prod stage
 │   └── Dockerfile        deps -> dev | build -> prod stages
-├── MODEL/                Local FastAPI inference server (Qwen2-VL)
-│   ├── server.py         /generate, /set_model, /
+├── MODEL/                FastAPI service — embeddings, reranking, inference
+│   ├── server.py         /embed, /rerank, /generate, /set_model, /
+│   ├── modal_segment.py  SAM2 object segmentation, deployed to a Modal GPU
 │   ├── register_dataset.py  CLI for registering LLaMA-Factory datasets
 │   ├── requirements.txt
 │   ├── README.md
@@ -203,17 +208,26 @@ JWT cookie issued by the auth endpoints.
 
 | Method | Path | Notes |
 |--------|------|-------|
-| POST | `/api/auth/register` | `{ email, username, password }` — sets cookie |
-| POST | `/api/auth/login` | `{ email, password }` — sets cookie |
-| POST | `/api/auth/logout` | Clears cookie |
-| GET  | `/api/auth/me` | Returns the current `{ id, email, username }` |
-| POST | `/upload` | multipart `file` field; returns `{ fileUrl }` |
-| GET  | `/uploads/:filename` | Static file server for uploaded images |
-| POST | `/api/chats` | `{ text }` — creates a chat with the first turn |
-| GET  | `/api/userchats` | List of `{ id, title, createdAt }` for the current user |
-| GET  | `/api/chats/:id` | `{ id, title, messages: [...] }`, scoped to current user |
-| PUT  | `/api/chats/:id` | Append a turn: `{ question, img? }` |
-| POST | `/api/generate` | Pure passthrough to the inference server |
+| POST   | `/api/auth/register` | `{ email, username, password }` — sets cookie |
+| POST   | `/api/auth/login` | `{ email, password }` — sets cookie |
+| POST   | `/api/auth/logout` | Clears cookie |
+| GET    | `/api/auth/me` | Returns the current `{ id, email, username }` |
+| POST   | `/upload` | multipart `file` field; returns `{ fileUrl }` |
+| GET    | `/uploads/:filename` | Static file server for uploaded images |
+| POST   | `/api/documents` | multipart `file` — queues a document for ingestion (202) |
+| GET    | `/api/documents` | Uploaded documents with status + chunk counts |
+| DELETE | `/api/documents/:id` | Delete a document and its chunks |
+| POST   | `/api/chats` | `{ text }` — creates an empty chat, returns `{ chatId }` |
+| GET    | `/api/userchats` | List of `{ id, title, createdAt }` for the current user |
+| GET    | `/api/chats/:id` | `{ id, title, messages: [...] }`, scoped to current user |
+| PATCH  | `/api/chats/:id` | Rename a chat: `{ title }` |
+| DELETE | `/api/chats/:id` | Delete a chat and its messages |
+| PUT    | `/api/chats/:id` | Append a turn, streams the answer over SSE: `{ question, img?, mode? }` |
+| POST   | `/api/generate` | Pure passthrough to the inference server |
+| GET    | `/api/segment/status` | Whether SAM2 segmentation is configured |
+| POST   | `/api/segment/warmup` | Wake the Modal GPU ahead of a request |
+| POST   | `/api/segment/predict` | Run SAM2 on point/box prompts, returns a mask |
+| POST   | `/api/segment/apply` | Apply a chosen mask, returns the object cutout |
 
 ## Tech stack
 
@@ -221,8 +235,11 @@ JWT cookie issued by the auth endpoints.
 |-------|--------|
 | Frontend | React 19 (RC), Vite 5, Tanstack Query, react-router-dom 6, react-markdown, react-webcam |
 | Backend  | Express 4 (ESM), Prisma 7 with `@prisma/adapter-pg`, bcryptjs, jsonwebtoken, cookie-parser, multer |
-| Database | PostgreSQL 16 |
-| Inference | FastAPI, transformers, qwen-vl-utils, PyTorch (CUDA when available) |
+| Database | PostgreSQL 16 with pgvector + full-text search |
+| Offline chat | Ollama (`qwen3.5:2b`); CPU embeddings + reranking (FastAPI, transformers, PyTorch) |
+| Agentic chat | LangGraph ReAct agent on Groq — the model decides when to search the corpus |
+| Image chat | Gemini 2.5 Flash answers any turn with an attached image |
+| Segmentation | SAM2 (`facebookresearch/sam2`) on a Modal T4 GPU |
 | Container | Docker + Docker Compose v2 |
 
 ## Notes
