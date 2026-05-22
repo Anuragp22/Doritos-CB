@@ -29,6 +29,11 @@ SAM2 runs on **GPU via Modal** — not on the CPU-only local host.
   deployment to be live and reachable. This was an explicit, accepted trade-off
   (the alternative — SAM2 on the CPU host — was rejected for being too slow).
 
+**Assumption:** sending "only the object" is only useful if the configured
+generation model is vision-capable. This feature changes *what image* is sent,
+not *which model* receives it — wiring up or verifying the vision model is a
+separate concern.
+
 ## Why Modal GPU (and what it simplifies)
 
 Running SAM2 on a GPU rather than the CPU host removes two problems from the
@@ -84,14 +89,27 @@ scale-to-zero). It mirrors `modal_app.py`'s conventions.
   CUDA extension build is skip-safe on a runtime image), then `fastapi`,
   `uvicorn`, `pillow`, `numpy`, `huggingface_hub`. Order matters: SAM2's
   `setup.py` imports `torch`, so torch is installed in an earlier layer.
+- **App & volume:** `modal.App("doritos-ai-segment")` — a distinct app name so
+  it deploys independently of `modal_app.py`'s `doritos-ai-model`. It reuses the
+  existing `doritos-hf-cache` `Volume`
+  (`Volume.from_name("doritos-hf-cache", create_if_missing=True)`) for the
+  checkpoint cache.
 - **Function:** `@app.function(gpu="T4", min_containers=0, scaledown_window=300,
-  timeout=300, volumes={"/root/.cache/huggingface": <Volume>},
+  timeout=300, volumes={"/root/.cache/huggingface": hf_cache},
   secrets=[Secret.from_name("doritos-model-auth")])` exposing an
   `@modal.asgi_app()` FastAPI app.
-- **Checkpoint:** `SAM2ImagePredictor.from_pretrained("facebook/sam2.1-hiera-tiny",
-  device="cuda")`, loaded once per container in the FastAPI `lifespan` handler.
-  Weights download from the HuggingFace Hub into the persistent `Volume`, so a
-  cold start re-downloads nothing.
+- **Model loading & concurrency:** the SAM2.1-hiera-tiny model is built **once
+  per container** in the FastAPI `lifespan` handler — weights pulled from the
+  HuggingFace Hub (`facebook/sam2.1-hiera-tiny`) into the `Volume`, so cold
+  starts re-download nothing. Each request then wraps a **fresh
+  `SAM2ImagePredictor` around that shared model**: `set_image()`/`predict()`
+  mutate predictor state, so a per-request predictor keeps concurrent requests
+  from corrupting each other. Constructing a predictor over an already-loaded
+  model is cheap.
+- **Input orientation:** images are decoded with `PIL.ImageOps.exif_transpose`
+  applied, so SAM2's pixel space matches the browser's auto-oriented `<img>`
+  display — otherwise clicks on an EXIF-rotated phone photo would hit the wrong
+  pixels.
 - **Auth:** reuses the existing `BearerAuthMiddleware` pattern and the
   `doritos-model-auth` secret (`MODEL_API_KEY`). `GET /` stays public as a
   health probe / warm-up target.
@@ -132,6 +150,11 @@ Response:
 ```json
 { "cutout_png": "<base64 PNG, RGB, object on white background, cropped to bbox>" }
 ```
+
+> **Note:** the exact SAM2 API (`from_pretrained` signature, how to get the
+> underlying model for a per-request predictor, the precise `predict` kwargs) is
+> version-sensitive — it gets pinned at implementation time against the `sam2`
+> commit the Modal image installs. The architecture above holds regardless.
 
 ### 2. Express backend — segmentation proxy routes
 
@@ -179,6 +202,10 @@ A new `CLIENT/src/components/segment/SegmentDialog.jsx` built on the existing
   - Each interaction triggers `POST /api/segment/predict` with the accumulated
     `points` / `labels` / `box`; the returned mask is drawn as a
     semi-transparent colored overlay.
+  - Rapid interactions are sequenced: an in-flight `predict` is aborted (its
+    response discarded) when a newer one starts, so a stale mask never
+    overwrites a fresh one — the same `AbortController` pattern `NewPrompt`
+    already uses for streaming.
 - **Controls:** **Use selection** (calls `apply`, disabled until a mask
   exists), **Reset** (clears points/box/mask), **Cancel**.
 - **On open:** fires `POST /api/segment/warmup` so the Modal container boots
@@ -241,10 +268,11 @@ A new `CLIENT/src/components/segment/SegmentDialog.jsx` built on the existing
   a synthetic image + mask (numpy) — assert the output is RGB, white outside the
   mask, and cropped to the bbox. The GPU endpoints are smoke-tested manually via
   `modal serve`.
-- **Backend:** route tests for `/api/segment/*` with the Modal HTTP call mocked
-  — `status` reflects `SEGMENT_API_URL`; `predict` forwards the inlined image;
-  `apply` writes a file to `uploads/` and returns its URL; routes return `503`
-  when unconfigured.
+- **Backend:** the testable pure pieces — the `SEGMENT_API_URL`
+  enabled/disabled logic and the cutout-save helper (base64 → file in
+  `uploads/`) — get `node --test` unit tests, matching the existing
+  `lib/*.test.js` style. Full Express route behavior is covered by the
+  verification pass below rather than by a new integration-test harness.
 - **Frontend:** unit-test the pure display↔natural coordinate-mapping function.
   The canvas interaction itself is verified manually.
 
