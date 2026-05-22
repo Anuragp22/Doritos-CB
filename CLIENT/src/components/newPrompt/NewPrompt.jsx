@@ -24,6 +24,7 @@ export function useNewPrompt({ data }) {
 
   const formRef = useRef(null);
   const controllerRef = useRef(null);
+  const pendingRef = useRef(null);
   const queryClient = useQueryClient();
 
   useEffect(() => () => controllerRef.current?.abort(), []);
@@ -34,6 +35,12 @@ export function useNewPrompt({ data }) {
       .then((d) => setSegmentEnabled(Boolean(d.enabled)))
       .catch(() => setSegmentEnabled(false));
   }, []);
+
+  // Reveal the attached-image preview (and its "Select object" button). Scroll
+  // once the image has loaded — before that the <img> has no height, so the
+  // block would still sit below the scroll fold.
+  const revealPending = () =>
+    pendingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
   const sendTurn = async (text) => {
     controllerRef.current?.abort();
@@ -93,12 +100,13 @@ export function useNewPrompt({ data }) {
     <>
       {img.isLoading && <div className="dispatch-thinking">Uploading image</div>}
       {img.dbData?.filePath && (
-        <div className="dispatch-turn--user">
+        <div className="dispatch-turn--user" ref={pendingRef}>
           <div className="dispatch-pending">
             <img
               src={img.dbData.filePath}
               alt="Uploaded preview"
               className="dispatch-pending-image"
+              onLoad={revealPending}
             />
             {segmentEnabled && (
               <div className="dispatch-pending-tools">
