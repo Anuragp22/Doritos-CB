@@ -235,43 +235,47 @@ export default function SegmentDialog({ open, onOpenChange, imageUrl, onApply })
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative overflow-hidden rounded-lg border">
-          <img
-            ref={imgRef}
-            src={imageUrl}
-            alt="Segment source"
-            className="block w-full select-none"
-            draggable={false}
-            onLoad={(e) =>
-              setNatural({
-                width: e.currentTarget.naturalWidth,
-                height: e.currentTarget.naturalHeight,
-              })
-            }
-          />
-          {natural && (
-            <canvas
-              ref={canvasRef}
-              width={natural.width}
-              height={natural.height}
-              className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
+        <div className="flex justify-center">
+          {/* inline-block shrinks the wrapper to the image so the overlay
+              canvas lines up; max-h/max-w keep tall or wide photos on-screen. */}
+          <div className="relative inline-block overflow-hidden rounded-lg border">
+            <img
+              ref={imgRef}
+              src={imageUrl}
+              alt="Segment source"
+              className="block max-h-[65vh] max-w-[min(90vw,40rem)] select-none"
+              draggable={false}
+              onLoad={(e) =>
+                setNatural({
+                  width: e.currentTarget.naturalWidth,
+                  height: e.currentTarget.naturalHeight,
+                })
+              }
             />
-          )}
-          {(warming || busy) && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/30">
-              <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm shadow">
-                <Loader2 className="size-4 animate-spin" />
-                <span>
-                  {warming
-                    ? 'Warming up the GPU — first use can take ~30s'
-                    : 'Working…'}
-                </span>
+            {natural && (
+              <canvas
+                ref={canvasRef}
+                width={natural.width}
+                height={natural.height}
+                className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+              />
+            )}
+            {(warming || busy) && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/30">
+                <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm shadow">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>
+                    {warming
+                      ? 'Warming up the GPU — first use can take ~30s'
+                      : 'Working…'}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2">
