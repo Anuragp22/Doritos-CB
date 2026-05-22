@@ -436,58 +436,21 @@ async function persistAssistantMessage(chatId, text, sources) {
 // ─── Chats ────────────────────────────────────────────────────────────
 
 app.post('/api/chats', requireAuth, async (req, res) => {
-  const { text, mode } = req.body;
-  if (!text) return res.status(400).json({ error: 'text required' });
-  const agentic = mode === 'agentic';
-
-  const chatPromise = prisma.chat.create({
-    data: {
-      userId: req.userId,
-      title: text.substring(0, 40),
-      messages: { create: [{ role: 'user', text }] },
-    },
-    select: { id: true },
-  });
-  // Offline mode retrieves upfront; the agent retrieves via its own tool.
-  const retrievedPromise = agentic ? null : retrieveContext(text, req.userId);
-
-  let chat;
+  // Create the chat row only. The first turn is sent from the chat page (via
+  // PUT) so the answer streams there, not on the landing page.
+  const text = (req.body.text || '').trim();
   try {
-    chat = await chatPromise;
+    const chat = await prisma.chat.create({
+      data: {
+        userId: req.userId,
+        title: (text || 'New chat').substring(0, 40),
+      },
+      select: { id: true },
+    });
+    res.json({ chatId: chat.id });
   } catch (err) {
     console.error('Create chat error:', err.message);
-    return res.status(500).json({ error: 'Error creating chat' });
-  }
-
-  setupSSE(res);
-  sendSSE(res, { chatId: chat.id });
-
-  try {
-    let result;
-    if (agentic) {
-      const userTurn = await buildUserTurn({ augmentedText: text });
-      result = await streamFromAgent(res, [userTurn], req, req.userId);
-      await persistAssistantMessage(chat.id, result.fullText, result.sources);
-    } else {
-      const retrieved = await retrievedPromise;
-      const sources = toSourcesPayload(retrieved);
-      if (sources) sendSSE(res, { sources });
-      const augmented = buildAugmentedPrompt(text, retrieved);
-      const userTurn = await buildUserTurn({ augmentedText: augmented });
-      result = await streamFromModel(res, [userTurn], req);
-      await persistAssistantMessage(chat.id, result.fullText, sources);
-    }
-
-    if (!result.aborted) {
-      sendSSE(res, { done: true });
-      res.end();
-    }
-  } catch (err) {
-    console.error('Stream chat error:', err.message);
-    if (!res.writableEnded) {
-      sendSSE(res, { error: err.message });
-      res.end();
-    }
+    res.status(500).json({ error: 'Error creating chat' });
   }
 });
 

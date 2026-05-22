@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUp, Code2, Image as ImageIcon, MessageSquare, Square } from 'lucide-react';
-import { readSSEStream } from '@/lib/stream';
-import MarkdownMessage from '@/components/markdownMessage';
-import Citations from '@/components/citations';
-import { useChatMode, ModeToggle, AgentSteps, applyStepEvent } from '@/components/agentic';
+import { ArrowUp, Code2, Image as ImageIcon, Loader2, MessageSquare, X } from 'lucide-react';
+import Upload from '@/components/upload/upload';
+import { useChatMode, ModeToggle } from '@/components/agentic';
 import '@/Routes/ChatPage/chatPage.css';
 
 const API = import.meta.env.VITE_API_URL;
+
+const EMPTY_IMG = { isLoading: false, error: '', dbData: {}, aiData: {} };
 
 const SUGGESTIONS = [
   { icon: MessageSquare, label: 'Start a conversation' },
@@ -19,127 +19,110 @@ const SUGGESTIONS = [
 const DashboardPage = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-
-  const [submittedText, setSubmittedText] = useState('');
-  const [streamingAnswer, setStreamingAnswer] = useState('');
-  const [streamingSources, setStreamingSources] = useState(null);
-  const [error, setError] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [steps, setSteps] = useState([]);
   const [mode, setMode] = useChatMode();
+  const [img, setImg] = useState(EMPTY_IMG);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
 
-  const controllerRef = useRef(null);
-  useEffect(() => () => controllerRef.current?.abort(), []);
+  const attachUrl = img.dbData?.filePath;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const text = e.target.text.value.trim();
-    if (!text) return;
+    if (!text && !attachUrl) return;
 
-    controllerRef.current?.abort();
-    controllerRef.current = new AbortController();
-
-    setSubmittedText(text);
-    setStreamingAnswer('');
-    setStreamingSources(null);
+    setCreating(true);
     setError('');
-    setSteps([]);
-    setIsStreaming(true);
-
-    let chatId = null;
     try {
+      // Create the chat row, then drop into it — the first turn is sent (and
+      // its answer streamed) on the chat page, not here.
       const res = await fetch(`${API}/api/chats`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, mode }),
-        signal: controllerRef.current.signal,
+        body: JSON.stringify({ text }),
       });
-
-      await readSSEStream(res, (event) => {
-        if (event.chatId) chatId = event.chatId;
-        else if (event.text) setStreamingAnswer((prev) => prev + event.text);
-        else if (event.sources) setStreamingSources(event.sources);
-        else if (event.step) setSteps((prev) => applyStepEvent(prev, event.step));
-        else if (event.error) setError(event.error);
-      });
-
+      if (!res.ok) throw new Error('Could not create chat');
+      const { chatId } = await res.json();
       queryClient.invalidateQueries({ queryKey: ['userChats'] });
-      if (chatId) navigate(`/dashboard/chats/${chatId}`);
+      navigate(`/dashboard/chats/${chatId}`, {
+        state: { pending: { text, img: attachUrl || null } },
+      });
     } catch (err) {
-      if (err.name !== 'AbortError') setError(err.message);
-    } finally {
-      setIsStreaming(false);
+      setError(err.message);
+      setCreating(false);
     }
   };
-
-  const cancel = () => controllerRef.current?.abort();
-
-  const isThread = isStreaming || streamingAnswer || submittedText;
 
   return (
     <div className="dispatch-shell flex h-full flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="dispatch-page">
-          {isThread ? (
-            <>
-              <div className="dispatch-turn--user">
-                <div className="dispatch-query">{submittedText}</div>
-              </div>
-              <div className="dispatch-turn--assistant">
-                <AgentSteps steps={steps} />
-                {streamingAnswer ? (
-                  <>
-                    <MarkdownMessage className="dispatch-body">{streamingAnswer}</MarkdownMessage>
-                    <Citations sources={streamingSources} variant="footnote" />
-                  </>
-                ) : (
-                  <div className="dispatch-thinking">Thinking</div>
-                )}
-              </div>
-              {error && <div className="dispatch-error">{error}</div>}
-            </>
-          ) : (
-            <div className="dispatch-landing-hero">
-              <h1 className="dispatch-landing-hero__title">What can I help with?</h1>
-              <ul className="dispatch-fields__list">
-                {SUGGESTIONS.map(({ icon: Icon, label }) => (
-                  <li key={label} className="dispatch-field">
-                    <Icon className="dispatch-field__icon" aria-hidden />
-                    <span className="dispatch-field__label">{label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <div className="dispatch-landing-hero">
+            <h1 className="dispatch-landing-hero__title">What can I help with?</h1>
+            <ul className="dispatch-fields__list">
+              {SUGGESTIONS.map(({ icon: Icon, label }) => (
+                <li key={label} className="dispatch-field">
+                  <Icon className="dispatch-field__icon" aria-hidden />
+                  <span className="dispatch-field__label">{label}</span>
+                </li>
+              ))}
+            </ul>
+            {error && <div className="dispatch-error">{error}</div>}
+          </div>
         </div>
       </div>
 
       <div className="dispatch-composer-bar">
         <form onSubmit={handleSubmit} className="dispatch-composer">
-          <input
-            type="text"
-            name="text"
-            placeholder="Ask anything…"
-            disabled={isStreaming}
-            autoComplete="off"
-          />
-          <div className="dispatch-composer__actions">
-            <ModeToggle mode={mode} setMode={setMode} disabled={isStreaming} />
-            {isStreaming ? (
+          {(img.isLoading || attachUrl) && (
+            <div className="dispatch-attach">
+              {img.isLoading ? (
+                <div className="dispatch-attach__thumb dispatch-attach__thumb--loading">
+                  <Loader2 className="size-4 animate-spin" />
+                </div>
+              ) : (
+                <div className="dispatch-attach__thumb">
+                  <img src={attachUrl} alt="Attachment" />
+                  <button
+                    type="button"
+                    className="dispatch-attach__remove"
+                    onClick={() => setImg(EMPTY_IMG)}
+                    aria-label="Remove image"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="dispatch-composer__row">
+            <input
+              type="text"
+              name="text"
+              placeholder="Ask anything…"
+              disabled={creating}
+              autoComplete="off"
+            />
+            <div className="dispatch-composer__actions">
+              <ModeToggle mode={mode} setMode={setMode} disabled={creating} />
+              <span className="dispatch-composer__upload">
+                <Upload setImg={setImg} />
+              </span>
               <button
-                type="button"
-                onClick={cancel}
-                aria-label="Stop"
-                className="dispatch-composer__btn dispatch-composer__btn--cancel"
+                type="submit"
+                aria-label="Send"
+                className="dispatch-composer__btn"
+                disabled={creating}
               >
-                <Square className="size-3.5" fill="currentColor" />
+                {creating ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="size-4" />
+                )}
               </button>
-            ) : (
-              <button type="submit" aria-label="Send" className="dispatch-composer__btn">
-                <ArrowUp className="size-4" />
-              </button>
-            )}
+            </div>
           </div>
         </form>
       </div>

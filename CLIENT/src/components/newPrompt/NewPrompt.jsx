@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, Square, Scissors, Undo2, X, Loader2 } from 'lucide-react';
 import Upload from '@/components/upload/upload';
@@ -26,7 +27,9 @@ export function useNewPrompt({ data }) {
   const [segmentEnabled, setSegmentEnabled] = useState(false);
 
   const controllerRef = useRef(null);
+  const sentPendingRef = useRef(null);
   const queryClient = useQueryClient();
+  const location = useLocation();
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
@@ -37,11 +40,12 @@ export function useNewPrompt({ data }) {
       .catch(() => setSegmentEnabled(false));
   }, []);
 
-  const sendTurn = async (text) => {
+  const sendTurn = async (text, imageUrlArg) => {
     controllerRef.current?.abort();
     controllerRef.current = new AbortController();
 
-    const imageUrl = img.dbData?.filePath || null;
+    const imageUrl =
+      imageUrlArg !== undefined ? imageUrlArg : img.dbData?.filePath || null;
 
     setQuestion(text);
     setSentImage(imageUrl);
@@ -84,6 +88,18 @@ export function useNewPrompt({ data }) {
       setIsStreaming(false);
     }
   };
+
+  // A chat created from the dashboard arrives with its first turn in router
+  // state — fire it once here so the answer streams on the chat page.
+  useEffect(() => {
+    const pending = location.state?.pending;
+    if (pending && data?.id && sentPendingRef.current !== data.id) {
+      sentPendingRef.current = data.id;
+      window.history.replaceState({}, ''); // don't replay the turn on refresh
+      sendTurn(pending.text || '', pending.img || null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id, location.state]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
