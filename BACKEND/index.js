@@ -597,14 +597,20 @@ app.get('/api/segment/status', requireAuth, (req, res) => {
   res.json({ enabled: segmentEnabled() });
 });
 
-app.post('/api/segment/warmup', requireAuth, (req, res) => {
+app.post('/api/segment/warmup', requireAuth, async (req, res) => {
   if (!segmentEnabled()) {
     return res.status(503).json({ error: 'Segmentation is not configured' });
   }
   const base = process.env.SEGMENT_API_URL.replace(/\/$/, '');
-  // Fire-and-forget: boots a cold Modal container while the user aims.
-  fetch(`${base}/`, { signal: AbortSignal.timeout(2000) }).catch(() => {});
-  res.json({ ok: true });
+  try {
+    // GET / answers only once the Modal container is booted and SAM2 is
+    // loaded, so awaiting it is a genuine "GPU ready" signal. The long timeout
+    // covers a full cold start; the client shows a spinner until this resolves.
+    const probe = await fetch(`${base}/`, { signal: AbortSignal.timeout(90000) });
+    res.json({ ready: probe.ok });
+  } catch {
+    res.json({ ready: false });
+  }
 });
 
 app.post('/api/segment/predict', requireAuth, async (req, res) => {

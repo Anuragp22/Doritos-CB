@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,12 +47,20 @@ export default function SegmentDialog({ open, onOpenChange, imageUrl, onApply })
   const [box, setBox] = useState(null);         // [x0,y0,x1,y1] | null
   const [maskUrl, setMaskUrl] = useState(null); // data: URL of the RGBA mask
   const [busy, setBusy] = useState(false);
+  const [warming, setWarming] = useState(false); // GPU cold-start in progress
 
-  // Warm the Modal container the moment the dialog opens.
+  // Warm the Modal GPU when the dialog opens. The backend's /warmup awaits
+  // Modal's health probe — which answers only once the container is booted and
+  // SAM2 is loaded — so the cold-start wait happens here, up front, while the
+  // user is still aiming, instead of stalling their first click.
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
+    setWarming(true);
     fetch(`${API}/api/segment/warmup`, { method: 'POST', credentials: 'include' })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setWarming(false); });
+    return () => { cancelled = true; };
   }, [open]);
 
   // Reset all selection state when the dialog opens or the image changes.
@@ -230,9 +239,16 @@ export default function SegmentDialog({ open, onOpenChange, imageUrl, onApply })
               onPointerUp={onPointerUp}
             />
           )}
-          {busy && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/40 text-sm">
-              Working…
+          {(warming || busy) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/30">
+              <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm shadow">
+                <Loader2 className="size-4 animate-spin" />
+                <span>
+                  {warming
+                    ? 'Warming up the GPU — first use can take ~30s'
+                    : 'Working…'}
+                </span>
+              </div>
             </div>
           )}
         </div>
