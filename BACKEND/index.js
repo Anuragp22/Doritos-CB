@@ -15,6 +15,7 @@ import { hybridRetrieve, buildAugmentedPrompt } from './lib/rag.js';
 import { streamChat, generateOnce } from './lib/ollama.js';
 import { streamAgent } from './lib/agent.js';
 import { enqueueIngest } from './lib/ingest.js';
+import { segmentEnabled, cutoutFilename, decodeBase64Png } from './lib/segment.js';
 
 const port = process.env.PORT || 3000;
 const MAX_UPLOAD_MB = 500;
@@ -561,6 +562,94 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Error in /api/generate:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ─── SAM2 segmentation ────────────────────────────────────────────────
+// Proxies to the SAM2 Modal GPU deployment. When SEGMENT_API_URL is unset the
+// feature reports disabled and the client hides the "Select object" button.
+
+async function callSegment(endpointPath, body) {
+  const base = process.env.SEGMENT_API_URL.replace(/\/$/, '');
+  const response = await fetch(`${base}${endpointPath}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.MODEL_API_KEY || ''}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Segmentation service ${response.status}: ${detail.slice(0, 200)}`);
+  }
+  return response.json();
+}
+
+// Resolve a /uploads/* URL to an inlined data: URI, or null if it cannot.
+async function inlineUploadOrNull(imageUrl) {
+  if (!imageUrl) return null;
+  const inline = await imageUrlToInline(imageUrl);
+  return inline && inline.startsWith('data:') ? inline : null;
+}
+
+app.get('/api/segment/status', requireAuth, (req, res) => {
+  res.json({ enabled: segmentEnabled() });
+});
+
+app.post('/api/segment/warmup', requireAuth, (req, res) => {
+  if (!segmentEnabled()) {
+    return res.status(503).json({ error: 'Segmentation is not configured' });
+  }
+  const base = process.env.SEGMENT_API_URL.replace(/\/$/, '');
+  // Fire-and-forget: boots a cold Modal container while the user aims.
+  fetch(`${base}/`, { signal: AbortSignal.timeout(2000) }).catch(() => {});
+  res.json({ ok: true });
+});
+
+app.post('/api/segment/predict', requireAuth, async (req, res) => {
+  if (!segmentEnabled()) {
+    return res.status(503).json({ error: 'Segmentation is not configured' });
+  }
+  try {
+    const { imageUrl, points = [], labels = [], box = null } = req.body;
+    const inline = await inlineUploadOrNull(imageUrl);
+    if (!inline) {
+      return res.status(400).json({ error: 'imageUrl did not resolve to an image' });
+    }
+    const result = await callSegment('/segment/predict', {
+      image_b64: inline, points, labels, box,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('Segment predict error:', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.post('/api/segment/apply', requireAuth, async (req, res) => {
+  if (!segmentEnabled()) {
+    return res.status(503).json({ error: 'Segmentation is not configured' });
+  }
+  try {
+    const { imageUrl, points = [], labels = [], box = null } = req.body;
+    const inline = await inlineUploadOrNull(imageUrl);
+    if (!inline) {
+      return res.status(400).json({ error: 'imageUrl did not resolve to an image' });
+    }
+    const { cutout_png } = await callSegment('/segment/apply', {
+      image_b64: inline, points, labels, box,
+    });
+    const filename = cutoutFilename(imageUrl);
+    await fs.writeFile(
+      path.join(__dirname, 'uploads', filename),
+      decodeBase64Png(cutout_png),
+    );
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+    res.json({ fileUrl });
+  } catch (err) {
+    console.error('Segment apply error:', err.message);
+    res.status(502).json({ error: err.message });
   }
 });
 
