@@ -1,11 +1,12 @@
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Loader2, Menu } from 'lucide-react';
+import { Loader2, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import ChatList from '@/components/chatList/chatList';
 import SidebarBrand from '@/components/sidebarBrand/SidebarBrand';
 import UserPanel from '@/components/userPanel/UserPanel';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Sheet,
   SheetContent,
@@ -28,6 +29,9 @@ const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem('sidebarCollapsed') === '1'
+  );
 
   useEffect(() => {
     if (isLoaded && !user) navigate('/sign-in');
@@ -36,6 +40,13 @@ const DashboardLayout = () => {
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
+
+  const toggleSidebar = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem('sidebarCollapsed', next ? '1' : '0');
+      return next;
+    });
 
   if (!isLoaded) {
     return (
@@ -46,12 +57,29 @@ const DashboardLayout = () => {
   }
 
   return (
-    <div className="flex h-screen flex-col md:grid md:grid-cols-[260px_1fr]">
-      <aside className="hidden h-full border-r border-border bg-card md:block">
-        <SidebarContents />
-      </aside>
+    <div
+      className={cn(
+        'flex h-screen flex-col md:grid',
+        collapsed ? 'md:grid-cols-[1fr]' : 'md:grid-cols-[260px_1fr]'
+      )}
+    >
+      {!collapsed && (
+        <aside className="relative hidden h-full border-r border-border bg-card md:block">
+          <SidebarContents />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={toggleSidebar}
+            aria-label="Collapse sidebar"
+            className="absolute right-2 top-2.5"
+          >
+            <PanelLeftClose className="size-4" />
+          </Button>
+        </aside>
+      )}
 
-      <div className="flex h-full flex-col overflow-hidden bg-background">
+      <div className="relative flex h-full flex-col overflow-hidden bg-background">
         <div className="flex items-center justify-between border-b border-border bg-card px-3 py-2 md:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <Button
@@ -75,6 +103,20 @@ const DashboardLayout = () => {
           </Link>
           <span className="size-9" aria-hidden />
         </div>
+
+        {collapsed && (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={toggleSidebar}
+            aria-label="Open sidebar"
+            className="absolute left-2 top-2 z-20 hidden border border-border bg-card md:flex"
+          >
+            <PanelLeftOpen className="size-4" />
+          </Button>
+        )}
+
         <section className="flex-1 overflow-hidden">
           <Outlet />
         </section>
