@@ -113,3 +113,22 @@
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
+/* Universal skeleton loader — a soft highlight sweeping across the muted base.
+   Used by the shadcn <Skeleton> component (components/ui/skeleton.jsx). */
+@keyframes skeletonSweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@utility skeleton-shimmer {
+  background-color: var(--accent);
+  background-image: linear-gradient(
+    90deg,
+    var(--accent) 25%,
+    #f6f0e4 50%,
+    var(--accent) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonSweep 1.6s ease-in-out infinite;
+}

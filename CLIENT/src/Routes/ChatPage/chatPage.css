@@ -333,20 +333,6 @@
   margin-left: auto;
 }
 
-/* Skeleton */
-.dispatch-skel {
-  background: linear-gradient(90deg, var(--paper-deep), rgba(26, 34, 56, 0.06), var(--paper-deep));
-  background-size: 200% 100%;
-  animation: dispatchShimmer 1.6s ease-in-out infinite;
-  height: 1rem;
-  border-radius: 4px;
-  margin-bottom: 0.6rem;
-}
-@keyframes dispatchShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
 /* ---- Landing hero (centered, asks "what can I help with?") ---- */
 .dispatch-landing-hero {
   display: flex;

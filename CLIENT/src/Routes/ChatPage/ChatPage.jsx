@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useNewPrompt } from '@/components/newPrompt/NewPrompt';
 import MarkdownMessage from '@/components/markdownMessage';
 import Citations from '@/components/citations';
+import { Skeleton } from '@/components/ui/skeleton';
 import './chatPage.css';
 
 const ChatPage = () => {
@@ -33,9 +34,9 @@ const ChatPage = () => {
         <div className="dispatch-page">
           {isPending ? (
             <div>
-              <div className="dispatch-skel" style={{ width: '60%' }} />
-              <div className="dispatch-skel" style={{ width: '95%' }} />
-              <div className="dispatch-skel" style={{ width: '88%' }} />
+              <Skeleton className="mb-2.5 h-4 w-3/5" />
+              <Skeleton className="mb-2.5 h-4 w-[95%]" />
+              <Skeleton className="h-4 w-[88%]" />
             </div>
           ) : error ? (
             <div className="dispatch-error">Unable to load chat.</div>
