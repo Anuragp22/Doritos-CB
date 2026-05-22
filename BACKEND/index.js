@@ -519,6 +519,36 @@ app.get('/api/chats/:id', requireAuth, async (req, res) => {
   }
 });
 
+app.patch('/api/chats/:id', requireAuth, async (req, res) => {
+  const title = (req.body.title || '').trim();
+  if (!title) return res.status(400).json({ error: 'title required' });
+  try {
+    const result = await prisma.chat.updateMany({
+      where: { id: req.params.id, userId: req.userId },
+      data: { title: title.slice(0, 80) },
+    });
+    if (result.count === 0) return res.status(404).json({ error: 'Chat not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Rename chat error:', err.message);
+    res.status(500).json({ error: 'Error renaming chat' });
+  }
+});
+
+app.delete('/api/chats/:id', requireAuth, async (req, res) => {
+  try {
+    // Messages cascade-delete with the chat (schema: Message.onDelete Cascade).
+    const result = await prisma.chat.deleteMany({
+      where: { id: req.params.id, userId: req.userId },
+    });
+    if (result.count === 0) return res.status(404).json({ error: 'Chat not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete chat error:', err.message);
+    res.status(500).json({ error: 'Error deleting chat' });
+  }
+});
+
 app.put('/api/chats/:id', requireAuth, async (req, res) => {
   const { question, img, mode } = req.body;
   // A turn needs text, an image, or both — an image alone is allowed.
